@@ -12,19 +12,46 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { UploadCloud, FileText, Loader2, Wand2 } from "lucide-react";
+import { UploadCloud, FileText, Loader2, Wand2, ChevronDown, Check } from "lucide-react";
+import type { Section } from "@/data/ich-e3-sections";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
+
 
 interface AiAssistantProps {
-  onGenerateDraft: (fileContents: string[]) => Promise<void>;
+  onGenerateDraft: (fileContents: string[], section: Section) => Promise<void>;
   isLoading: boolean;
+  selectedSection: Section | null;
+  sections: Section[];
+  setSelectedSection: (section: Section | null) => void;
 }
+
+
+const flattenSections = (sections: Section[]): Section[] => {
+  let flat: Section[] = [];
+  sections.forEach(section => {
+    flat.push(section);
+    if (section.children) {
+      flat = flat.concat(flattenSections(section.children));
+    }
+  });
+  return flat;
+};
+
 
 export function AiAssistant({
   onGenerateDraft,
   isLoading,
+  selectedSection,
+  sections,
+  setSelectedSection,
 }: AiAssistantProps) {
   const [files, setFiles] = useState<File[]>([]);
   const { toast } = useToast();
+  const [open, setOpen] = useState(false)
+
+  const allSections = flattenSections(sections);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
@@ -42,7 +69,16 @@ export function AiAssistant({
       return;
     }
 
-    const fileReadPromises = files.map(file => {
+    if (!selectedSection) {
+        toast({
+            variant: "destructive",
+            title: "No Section Selected",
+            description: "Please select a section to generate a draft for.",
+          });
+          return;
+    }
+
+    const fileReadPromises = files.map((file) => {
       return new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -61,16 +97,16 @@ export function AiAssistant({
     });
 
     Promise.all(fileReadPromises)
-      .then(fileContents => {
-        onGenerateDraft(fileContents);
+      .then((fileContents) => {
+        onGenerateDraft(fileContents, selectedSection);
       })
-      .catch(error => {
+      .catch((error) => {
         console.error(error);
         toast({
-            variant: "destructive",
-            title: "File Read Error",
-            description: "An error occurred while reading the files.",
-          });
+          variant: "destructive",
+          title: "File Read Error",
+          description: "An error occurred while reading the files.",
+        });
       });
   };
 
@@ -82,13 +118,13 @@ export function AiAssistant({
           AI Draft Assistant
         </CardTitle>
         <CardDescription>
-          Upload documents to generate a full CSR draft.
+          Generate a draft for a specific CSR section.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col gap-6">
         <div>
           <Label htmlFor="file-upload" className="font-medium">
-            Upload Source Document(s)
+            1. Upload Source Document(s)
           </Label>
           <div className="mt-2">
             <Label
@@ -98,12 +134,12 @@ export function AiAssistant({
               <div className="flex flex-col items-center justify-center pt-5 pb-6">
                 <UploadCloud className="w-8 h-8 mb-3 text-muted-foreground" />
                 <p className="mb-2 text-sm text-muted-foreground">
-                  <span className="font-semibold text-accent">Click to upload</span> or drag
-                  and drop
+                  <span className="font-semibold text-accent">
+                    Click to upload
+                  </span>{" "}
+                  or drag and drop
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  PDF, DOCX, or TXT
-                </p>
+                <p className="text-xs text-muted-foreground">PDF, DOCX, or TXT</p>
               </div>
               <Input
                 id="file-upload"
@@ -119,7 +155,10 @@ export function AiAssistant({
             <div className="mt-3 space-y-2">
               <p className="text-sm font-medium">Uploaded Files:</p>
               {files.map((file, index) => (
-                <div key={index} className="flex items-center gap-2 text-sm text-foreground p-2 bg-muted rounded-md">
+                <div
+                  key={index}
+                  className="flex items-center gap-2 text-sm text-foreground p-2 bg-muted rounded-md"
+                >
                   <FileText className="h-4 w-4 text-accent" />
                   <span className="truncate font-medium">{file.name}</span>
                 </div>
@@ -128,19 +167,69 @@ export function AiAssistant({
           )}
         </div>
 
+        <div>
+            <Label className="font-medium">
+                2. Select Section for Drafting
+            </Label>
+            <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button
+                variant="outline"
+                role="combobox"
+                aria-expanded={open}
+                className="w-full justify-between mt-2"
+                >
+                {selectedSection
+                    ? `${selectedSection.id} ${selectedSection.title}`
+                    : "Select section..."}
+                <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[340px] p-0">
+                <Command>
+                <CommandInput placeholder="Search section..." />
+                <CommandList>
+                <CommandEmpty>No section found.</CommandEmpty>
+                <CommandGroup>
+                    {allSections.map((section) => (
+                    <CommandItem
+                        key={section.id}
+                        value={`${section.id} ${section.title}`}
+                        onSelect={() => {
+                            setSelectedSection(section)
+                            setOpen(false)
+                        }}
+                    >
+                        <Check
+                        className={cn(
+                            "mr-2 h-4 w-4",
+                            selectedSection?.id === section.id ? "opacity-100" : "opacity-0"
+                        )}
+                        />
+                        {section.id} {section.title}
+                    </CommandItem>
+                    ))}
+                </CommandGroup>
+                </CommandList>
+                </Command>
+            </PopoverContent>
+            </Popover>
+        </div>
+
+
         <div className="mt-auto">
           <Button
             size="lg"
             className="w-full text-base"
             onClick={handleGenerateClick}
-            disabled={isLoading || files.length === 0}
+            disabled={isLoading || files.length === 0 || !selectedSection}
           >
             {isLoading ? (
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             ) : (
               <Wand2 className="mr-2 h-5 w-5" />
             )}
-            Generate Full Draft
+            Generate Section Draft
           </Button>
         </div>
       </CardContent>

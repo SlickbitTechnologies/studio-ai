@@ -11,17 +11,19 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, FileText } from "lucide-react";
+import { ChevronRight, FileText, Pencil } from "lucide-react";
 
 interface IchE3NavigatorProps {
   activeSection: Section | null;
   setActiveSection: (section: Section) => void;
+  onSelectForDrafting: (section: Section) => void;
 }
 
 const SectionItem = ({
   section,
   activeSection,
   setActiveSection,
+  onSelectForDrafting,
   level = 0,
 }: {
   section: Section;
@@ -29,22 +31,31 @@ const SectionItem = ({
 } & IchE3NavigatorProps) => {
   const isActive = activeSection?.id === section.id;
 
+  const handleSelectForDrafting = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onSelectForDrafting(section);
+  }
+
   if (section.children && section.children.length > 0) {
     return (
       <Collapsible>
-        <div className="flex items-center">
+        <div className="flex items-center group pr-2">
           <CollapsibleTrigger asChild>
             <Button
               variant="ghost"
               className={cn(
-                "flex-1 justify-start h-8 pl-2 pr-1 group"
+                "flex-1 justify-start h-8 pl-2 pr-1"
               )}
               style={{ paddingLeft: `${level * 1 + 0.5}rem` }}
+              onClick={() => setActiveSection(section)}
             >
-              <ChevronRight className="h-4 w-4 mr-2 transition-transform duration-200 group-data-[state=open]:rotate-90" />
+              <ChevronRight className="h-4 w-4 mr-2 transition-transform duration-200" />
               <span className="font-semibold truncate">{section.id} {section.title}</span>
             </Button>
           </CollapsibleTrigger>
+           <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100" onClick={handleSelectForDrafting}>
+              <Pencil className="h-3 w-3" />
+            </Button>
         </div>
         <CollapsibleContent>
           <div className="flex flex-col">
@@ -54,6 +65,7 @@ const SectionItem = ({
                 section={child}
                 activeSection={activeSection}
                 setActiveSection={setActiveSection}
+                onSelectForDrafting={onSelectForDrafting}
                 level={level + 1}
               />
             ))}
@@ -64,20 +76,26 @@ const SectionItem = ({
   }
 
   return (
-    <Button
-      variant={isActive ? "secondary" : "ghost"}
-      className={cn("w-full justify-start h-8", isActive && "font-bold")}
-      onClick={() => setActiveSection(section)}
-      style={{ paddingLeft: `${level * 1 + 1.5}rem` }}
-    >
-      <span className="truncate">{section.id} {section.title}</span>
-    </Button>
+    <div className="flex items-center group pr-2">
+      <Button
+        variant={isActive ? "secondary" : "ghost"}
+        className={cn("w-full justify-start h-8 flex-1", isActive && "font-bold")}
+        onClick={() => setActiveSection(section)}
+        style={{ paddingLeft: `${level * 1 + 1.5}rem` }}
+      >
+        <span className="truncate">{section.id} {section.title}</span>
+      </Button>
+       <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100" onClick={handleSelectForDrafting}>
+         <Pencil className="h-3 w-3" />
+       </Button>
+    </div>
   );
 };
 
 export function IchE3Navigator({
   activeSection,
   setActiveSection,
+  onSelectForDrafting,
 }: IchE3NavigatorProps) {
   return (
     <div className="h-full flex flex-col">
@@ -95,6 +113,7 @@ export function IchE3Navigator({
               section={section}
               activeSection={activeSection}
               setActiveSection={setActiveSection}
+              onSelectForDrafting={onSelectForDrafting}
             />
           ))}
         </div>
