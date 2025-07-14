@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useRef, useMemo } from "react";
@@ -28,6 +29,13 @@ import { IchE3Navigator } from "@/components/ich-e3-navigator";
 import { WordEditor } from "@/components/word-editor";
 import { generateCsrDraft } from "@/ai/flows/generate-csr-draft";
 import { cn } from "@/lib/utils";
+import * as pdfjs from "pdfjs-dist";
+import mammoth from "mammoth";
+
+// Set worker path for pdfjs
+if (typeof window !== "undefined") {
+  pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+}
 
 interface UploadedFile {
   name: string;
@@ -92,28 +100,55 @@ export default function CsrDraftingPage() {
     }
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
 
-    Array.from(files).forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const content = e.target?.result as string;
+    for (const file of Array.from(files)) {
+      try {
+        let content = "";
+        if (file.type === "application/pdf") {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await pdfjs.getDocument(arrayBuffer).promise;
+          let textContent = "";
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const text = await page.getTextContent();
+            textContent += text.items.map((item: any) => item.str).join(" ");
+          }
+          content = textContent;
+        } else if (file.name.endsWith(".docx")) {
+          const arrayBuffer = await file.arrayBuffer();
+          const result = await mammoth.extractRawText({ arrayBuffer });
+          content = result.value;
+        } else {
+          content = await file.text();
+        }
+
         setUploadedFiles((prev) => [...prev, { name: file.name, content }]);
         if (!activeFile) {
           setActiveFile(file.name);
         }
-      };
-      reader.readAsText(file);
-    });
+        toast({ title: "File Uploaded", description: `${file.name} has been successfully processed.`});
+      } catch (error) {
+        console.error("Error processing file:", error);
+        toast({ variant: "destructive", title: "File Error", description: `Could not process ${file.name}.` });
+      }
+    }
+    // Reset file input
+    if(fileInputRef.current) {
+        fileInputRef.current.value = "";
+    }
   };
 
   const removeFile = (fileName: string) => {
-    setUploadedFiles((prev) => prev.filter((f) => f.name !== fileName));
-    if (activeFile === fileName) {
-      setActiveFile(uploadedFiles.length > 1 ? uploadedFiles[0].name : null);
-    }
+    setUploadedFiles((prev) => {
+        const newFiles = prev.filter((f) => f.name !== fileName);
+        if (activeFile === fileName) {
+            setActiveFile(newFiles.length > 0 ? newFiles[0].name : null);
+        }
+        return newFiles;
+    });
   };
 
   const canGenerate = useMemo(() => {
@@ -154,11 +189,11 @@ export default function CsrDraftingPage() {
 
         if (targetElement) {
           let nextSibling = targetElement.nextElementSibling;
-          while (nextSibling && !nextSibling.tagName.startsWith("H")) {
-            const toRemove = nextSibling;
-            nextSibling = nextSibling.nextElementSibling;
-            toRemove.remove();
+          // Remove existing placeholder paragraph
+          if (nextSibling && nextSibling.tagName === 'P' && nextSibling.textContent?.includes('[Content for this section goes here.]')) {
+            nextSibling.remove();
           }
+          // Insert new draft
           targetElement.insertAdjacentHTML("afterend", draft);
         } else {
           // If section does not exist, append it. This is a fallback.
@@ -259,10 +294,10 @@ export default function CsrDraftingPage() {
                     onChange={handleFileChange}
                     className="hidden"
                     multiple
-                    accept=".txt,.md,.html"
+                    accept=".txt,.md,.html,.pdf,.docx"
                   />
                   <p className="text-xs text-muted-foreground mt-2">
-                    Upload text, markdown, or HTML files.
+                    Upload PDF, DOCX, TXT, MD, or HTML files.
                   </p>
                 </div>
                 {uploadedFiles.length > 0 && (
