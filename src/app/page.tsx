@@ -2,19 +2,22 @@
 "use client";
 
 import { useState, useRef, useMemo } from "react";
-import { BrainCircuit, Upload, Trash2, Wand2, Loader2 } from "lucide-react";
+import { BrainCircuit, Upload, Trash2, Wand2, Loader2, ChevronDown, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 import type { Section } from "@/data/ich-e3-sections";
 import { ichE3Sections } from "@/data/ich-e3-sections";
 import { IchE3Navigator } from "@/components/ich-e3-navigator";
 import { WordEditor } from "@/components/word-editor";
 import { generateCsrDraft } from "@/ai/flows/generate-csr-draft";
+import { cn } from "@/lib/utils";
 import * as pdfjs from "pdfjs-dist";
 import mammoth from "mammoth";
 
@@ -29,7 +32,7 @@ interface UploadedFile {
 }
 
 function getInitialEditorContent(): string {
-  let content = `<h1>Clinical Study Report</h1><p>Welcome to CSR DraftWise! This document is structured according to the ICH E3 guidelines.</p><p>To get started, upload your source documents and click "Generate Draft".</p>`;
+  let content = `<h1>Clinical Study Report</h1><p>Welcome to CSR DraftWise! This document is structured according to the ICH E3 guidelines.</p><p>To get started, upload your source documents, select a section, and click "Generate Draft".</p>`;
 
   const generateSections = (sections: Section[], level: number): string => {
     return sections
@@ -55,9 +58,10 @@ export default function CsrDraftingPage() {
   );
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [activeFile, setActiveFile] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generationProgress, setGenerationProgress] = useState(0);
-  const [currentSectionTitle, setCurrentSectionTitle] = useState("");
+  const [selectedSection, setSelectedSection] = useState<Section | null>(null);
+  const [isSectionSelectorOpen, setSectionSelectorOpen] = useState(false);
 
   const { toast } = useToast();
   const editorRef = useRef<HTMLDivElement>(null);
@@ -77,7 +81,7 @@ export default function CsrDraftingPage() {
     return sections;
   }, []);
 
-  const handleSectionSelect = (
+  const handleSectionSelectInNav = (
     section: Section,
     behavior: "auto" | "smooth" = "smooth"
   ) => {
@@ -90,12 +94,6 @@ export default function CsrDraftingPage() {
     );
     if (targetElement) {
       targetElement.scrollIntoView({ behavior: behavior, block: "start" });
-    } else {
-      toast({
-        variant: "default",
-        title: "Section not found",
-        description: `Section ${section.id} does not exist in the document.`,
-      });
     }
   };
 
@@ -123,87 +121,98 @@ export default function CsrDraftingPage() {
         } else {
           content = await file.text();
         }
-
-        setUploadedFiles((prev) => [...prev, { name: file.name, content }]);
+        
+        const newFile = { name: file.name, content };
+        setUploadedFiles((prev) => {
+          const newFiles = [...prev, newFile];
+          if(newFiles.length === 1) {
+            setActiveFile(newFile.name);
+          }
+          return newFiles;
+        });
         toast({ title: "File Uploaded", description: `${file.name} has been successfully processed.`});
       } catch (error) {
         console.error("Error processing file:", error);
         toast({ variant: "destructive", title: "File Error", description: `Could not process ${file.name}.` });
       }
     }
-    // Reset file input
     if(fileInputRef.current) {
         fileInputRef.current.value = "";
     }
   };
 
   const removeFile = (fileName: string) => {
-    setUploadedFiles((prev) => prev.filter((f) => f.name !== fileName));
+    setUploadedFiles((prev) => {
+      const newFiles = prev.filter((f) => f.name !== fileName);
+      if (activeFile === fileName) {
+        setActiveFile(newFiles.length > 0 ? newFiles[0].name : null);
+      }
+      return newFiles;
+    });
   };
 
   const canGenerate = useMemo(() => {
-    return uploadedFiles.length > 0;
-  }, [uploadedFiles]);
+    return !!activeFile && !!selectedSection;
+  }, [activeFile, selectedSection]);
 
   const handleGenerateDraft = async () => {
-    if (!canGenerate) return;
+    if (!canGenerate || !selectedSection || !activeFile) return;
 
     setIsGenerating(true);
-    setGenerationProgress(0);
-    
-    const combinedSourceText = uploadedFiles.map(f => `--- Document: ${f.name} ---\n${f.content}`).join('\n\n');
 
-    let finalHtml = getInitialEditorContent();
-
-    for (let i = 0; i < allSections.length; i++) {
-        const section = allSections[i];
-        setCurrentSectionTitle(`${section.id} ${section.title}`);
-        
-        try {
-            const response = await generateCsrDraft({
-                sectionId: section.id,
-                sectionTitle: section.title,
-                sourceText: combinedSourceText,
-            });
-
-            const { draft } = response;
-            
-            const sectionId = `section-${section.id}`;
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = finalHtml;
-            
-            const targetElement = tempDiv.querySelector(`#${sectionId}`);
-            if (targetElement) {
-                // Find and remove the placeholder paragraph
-                let nextElement = targetElement.nextElementSibling;
-                if (nextElement && nextElement.tagName === 'P' && nextElement.textContent?.includes('[Content for this section')) {
-                    nextElement.remove();
-                }
-                targetElement.insertAdjacentHTML("afterend", draft);
-                finalHtml = tempDiv.innerHTML;
-            }
-
-            setEditorContent(finalHtml);
-            
-        } catch (error: any) {
-            console.error(`Error generating draft for section ${section.id}:`, error);
-            toast({
-                variant: "destructive",
-                title: `AI Generation Failed for Section ${section.id}`,
-                description: error.message || "An unexpected error occurred. Skipping section.",
-            });
-        }
-        
-        setGenerationProgress(((i + 1) / allSections.length) * 100);
+    const sourceFile = uploadedFiles.find(f => f.name === activeFile);
+    if (!sourceFile) {
+        toast({ variant: "destructive", title: "Source file not found." });
+        setIsGenerating(false);
+        return;
     }
-    
-    toast({
-      title: "Full Draft Generated",
-      description: `The entire CSR document has been drafted.`,
-    });
+
+    try {
+      const response = await generateCsrDraft({
+        sectionId: selectedSection.id,
+        sectionTitle: selectedSection.title,
+        sourceText: sourceFile.content,
+      });
+
+      const { draft } = response;
+
+      const sectionId = `section-${selectedSection.id}`;
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = editorContent;
+
+      const targetElement = tempDiv.querySelector(`#${sectionId}`);
+      if (targetElement) {
+        let placeholder = targetElement.nextElementSibling;
+        if (placeholder && placeholder.tagName === 'P' && placeholder.textContent?.includes('[Content for this section')) {
+          placeholder.outerHTML = draft; // Replace placeholder with draft
+        } else {
+          targetElement.insertAdjacentHTML("afterend", draft);
+        }
+        setEditorContent(tempDiv.innerHTML);
+        handleSectionSelectInNav(selectedSection, 'auto');
+      } else {
+         toast({
+            variant: "destructive",
+            title: "Section Not Found",
+            description: `Could not find section ${selectedSection.id} in the editor.`,
+        });
+      }
+      
+      toast({
+        title: `Draft Generated for ${selectedSection.id}`,
+        description: `Content for "${selectedSection.title}" has been inserted.`,
+      });
+
+    } catch (error: any) {
+      console.error(`Error generating draft for section ${selectedSection.id}:`, error);
+      toast({
+        variant: "destructive",
+        title: `AI Generation Failed`,
+        description: error.message || "An unexpected error occurred.",
+      });
+    }
 
     setIsGenerating(false);
-    setCurrentSectionTitle("");
   };
 
   return (
@@ -220,7 +229,7 @@ export default function CsrDraftingPage() {
         <aside className="w-[380px] shrink-0 border-r bg-card/50">
           <IchE3Navigator
             activeSection={activeSection}
-            setActiveSection={handleSectionSelect}
+            setActiveSection={handleSectionSelectInNav}
           />
         </aside>
 
@@ -268,41 +277,89 @@ export default function CsrDraftingPage() {
                 {uploadedFiles.length > 0 && (
                   <div>
                     <Label className="font-medium">
-                      Active source documents:
+                      Select active source document:
                     </Label>
                     <ScrollArea className="h-40 mt-2">
-                      <div className="space-y-1 pr-4">
-                        {uploadedFiles.map((file) => (
-                          <div
-                            key={file.name}
-                            className="flex items-center justify-between p-2 bg-muted/50 rounded-md text-sm"
-                          >
-                            <p className="font-normal truncate">{file.name}</p>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 shrink-0"
-                              onClick={() => removeFile(file.name)}
+                      <RadioGroup value={activeFile || ""} onValueChange={setActiveFile}>
+                        <div className="space-y-1 pr-4">
+                          {uploadedFiles.map((file) => (
+                            <div
+                              key={file.name}
+                              className="flex items-center justify-between p-2 bg-muted/50 rounded-md text-sm"
                             >
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
+                              <Label htmlFor={file.name} className="flex items-center gap-3 cursor-pointer truncate flex-1">
+                                  <RadioGroupItem value={file.name} id={file.name} />
+                                  <span className="font-normal truncate">{file.name}</span>
+                              </Label>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 shrink-0"
+                                onClick={() => removeFile(file.name)}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </RadioGroup>
                     </ScrollArea>
                   </div>
                 )}
               </div>
 
+               <div className="space-y-4">
+                <Label className="font-semibold text-lg">
+                  2. Select Section to Draft
+                </Label>
+                <Popover open={isSectionSelectorOpen} onOpenChange={setSectionSelectorOpen}>
+                    <PopoverTrigger asChild>
+                        <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={isSectionSelectorOpen}
+                            className="w-full justify-between"
+                        >
+                            {selectedSection
+                                ? `${selectedSection.id} ${selectedSection.title}`
+                                : "Select a section..."}
+                            <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[370px] p-0">
+                        <Command>
+                            <CommandInput placeholder="Search section..." />
+                            <CommandList>
+                                <CommandEmpty>No section found.</CommandEmpty>
+                                <CommandGroup>
+                                    {allSections.map((section) => (
+                                        <CommandItem
+                                            key={section.id}
+                                            value={`${section.id} ${section.title}`}
+                                            onSelect={() => {
+                                                setSelectedSection(section);
+                                                setSectionSelectorOpen(false);
+                                                handleSectionSelectInNav(section, 'auto');
+                                            }}
+                                        >
+                                            <Check
+                                                className={cn(
+                                                    "mr-2 h-4 w-4",
+                                                    selectedSection?.id === section.id ? "opacity-100" : "opacity-0"
+                                                )}
+                                            />
+                                            {section.id} {section.title}
+                                        </CommandItem>
+                                    ))}
+                                </CommandGroup>
+                            </CommandList>
+                        </Command>
+                    </PopoverContent>
+                </Popover>
+              </div>
+
+
               <div className="mt-auto pt-4 border-t">
-                {isGenerating && (
-                  <div className="mb-4 text-center">
-                    <Progress value={generationProgress} className="mb-2" />
-                    <p className="text-sm text-muted-foreground animate-pulse">
-                      Drafting: {currentSectionTitle}
-                    </p>
-                  </div>
-                )}
                 <Button
                   className="w-full"
                   size="lg"
@@ -312,12 +369,12 @@ export default function CsrDraftingPage() {
                   {isGenerating ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generating...
+                      Generating Section...
                     </>
                   ) : (
                     <>
                       <Wand2 className="mr-2 h-4 w-4" />
-                      Generate Full Draft
+                      Generate Section Draft
                     </>
                   )}
                 </Button>
@@ -329,3 +386,5 @@ export default function CsrDraftingPage() {
     </div>
   );
 }
+
+    
