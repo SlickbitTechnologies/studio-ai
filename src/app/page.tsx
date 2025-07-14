@@ -7,28 +7,14 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { ChevronsUpDown } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 import type { Section } from "@/data/ich-e3-sections";
 import { ichE3Sections } from "@/data/ich-e3-sections";
 import { IchE3Navigator } from "@/components/ich-e3-navigator";
 import { WordEditor } from "@/components/word-editor";
 import { generateCsrDraft } from "@/ai/flows/generate-csr-draft";
-import { cn } from "@/lib/utils";
 import * as pdfjs from "pdfjs-dist";
 import mammoth from "mammoth";
 
@@ -43,7 +29,7 @@ interface UploadedFile {
 }
 
 function getInitialEditorContent(): string {
-  let content = `<h1>Clinical Study Report</h1><p>Welcome to CSR DraftWise! This document is structured according to the ICH E3 guidelines.</p><p>To get started, upload your source documents, select a section to draft, and click "Generate Draft". You can also begin writing your content directly in this editor.</p>`;
+  let content = `<h1>Clinical Study Report</h1><p>Welcome to CSR DraftWise! This document is structured according to the ICH E3 guidelines.</p><p>To get started, upload your source documents and click "Generate Draft".</p>`;
 
   const generateSections = (sections: Section[], level: number): string => {
     return sections
@@ -52,7 +38,8 @@ function getInitialEditorContent(): string {
         const childrenContent = section.children
           ? generateSections(section.children, level + 1)
           : "";
-        return `<${headingTag} id="section-${section.id}">${section.id} ${section.title}</${headingTag}><p>[Content for this section goes here.]</p>${childrenContent}`;
+        const placeholder = `<p>[Content for this section will be generated here.]</p>`;
+        return `<${headingTag} id="section-${section.id}">${section.id} ${section.title}</${headingTag}>${placeholder}${childrenContent}`;
       })
       .join("");
   };
@@ -68,15 +55,27 @@ export default function CsrDraftingPage() {
   );
 
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [activeFile, setActiveFile] = useState<string | null>(null);
-  const [selectedSectionForDrafting, setSelectedSectionForDrafting] =
-    useState<Section | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [open, setOpen] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [currentSectionTitle, setCurrentSectionTitle] = useState("");
 
   const { toast } = useToast();
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const allSections: Section[] = useMemo(() => {
+    const sections: Section[] = [];
+    const collectSections = (s: Section[]) => {
+      s.forEach(section => {
+        sections.push(section);
+        if (section.children) {
+          collectSections(section.children);
+        }
+      });
+    };
+    collectSections(ichE3Sections);
+    return sections;
+  }, []);
 
   const handleSectionSelect = (
     section: Section,
@@ -126,9 +125,6 @@ export default function CsrDraftingPage() {
         }
 
         setUploadedFiles((prev) => [...prev, { name: file.name, content }]);
-        if (!activeFile) {
-          setActiveFile(file.name);
-        }
         toast({ title: "File Uploaded", description: `${file.name} has been successfully processed.`});
       } catch (error) {
         console.error("Error processing file:", error);
@@ -142,104 +138,73 @@ export default function CsrDraftingPage() {
   };
 
   const removeFile = (fileName: string) => {
-    setUploadedFiles((prev) => {
-        const newFiles = prev.filter((f) => f.name !== fileName);
-        if (activeFile === fileName) {
-            setActiveFile(newFiles.length > 0 ? newFiles[0].name : null);
-        }
-        return newFiles;
-    });
+    setUploadedFiles((prev) => prev.filter((f) => f.name !== fileName));
   };
 
   const canGenerate = useMemo(() => {
-    return (
-      selectedSectionForDrafting &&
-      activeFile &&
-      uploadedFiles.some((f) => f.name === activeFile)
-    );
-  }, [selectedSectionForDrafting, activeFile, uploadedFiles]);
+    return uploadedFiles.length > 0;
+  }, [uploadedFiles]);
 
   const handleGenerateDraft = async () => {
-    if (!canGenerate || !selectedSectionForDrafting) return;
+    if (!canGenerate) return;
 
     setIsGenerating(true);
-    try {
-      const sourceFile = uploadedFiles.find((f) => f.name === activeFile);
-      if (!sourceFile) {
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "Selected source file not found.",
-        });
-        return;
-      }
+    setGenerationProgress(0);
+    
+    const combinedSourceText = uploadedFiles.map(f => `--- Document: ${f.name} ---\n${f.content}`).join('\n\n');
 
-      const response = await generateCsrDraft({
-        sectionId: selectedSectionForDrafting.id,
-        sectionTitle: selectedSectionForDrafting.title,
-        sourceText: sourceFile.content,
-      });
+    let finalHtml = getInitialEditorContent();
 
-      const { draft } = response;
+    for (let i = 0; i < allSections.length; i++) {
+        const section = allSections[i];
+        setCurrentSectionTitle(`${section.id} ${section.title}`);
+        
+        try {
+            const response = await generateCsrDraft({
+                sectionId: section.id,
+                sectionTitle: section.title,
+                sourceText: combinedSourceText,
+            });
 
-      const editorContainer = editorRef.current;
-      if (editorContainer) {
-        const sectionId = `section-${selectedSectionForDrafting.id}`;
-        let targetElement = editorContainer.querySelector(`#${sectionId}`);
+            const { draft } = response;
+            
+            const sectionId = `section-${section.id}`;
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = finalHtml;
+            
+            const targetElement = tempDiv.querySelector(`#${sectionId}`);
+            if (targetElement) {
+                // Find and remove the placeholder paragraph
+                let nextElement = targetElement.nextElementSibling;
+                if (nextElement && nextElement.tagName === 'P' && nextElement.textContent?.includes('[Content for this section')) {
+                    nextElement.remove();
+                }
+                targetElement.insertAdjacentHTML("afterend", draft);
+                finalHtml = tempDiv.innerHTML;
+            }
 
-        if (targetElement) {
-          let nextSibling = targetElement.nextElementSibling;
-          // Remove existing placeholder paragraph
-          if (nextSibling && nextSibling.tagName === 'P' && nextSibling.textContent?.includes('[Content for this section goes here.]')) {
-            nextSibling.remove();
-          }
-          // Insert new draft
-          targetElement.insertAdjacentHTML("afterend", draft);
-        } else {
-          // If section does not exist, append it. This is a fallback.
-          const newContent = `
-            <h${selectedSectionForDrafting.id.split(".").length + 1} id="${sectionId}">
-              ${selectedSectionForDrafting.id} ${selectedSectionForDrafting.title}
-            </h${selectedSectionForDrafting.id.split(".").length + 1}>
-            ${draft}
-          `;
-          editorContainer.innerHTML += newContent;
+            setEditorContent(finalHtml);
+            
+        } catch (error: any) {
+            console.error(`Error generating draft for section ${section.id}:`, error);
+            toast({
+                variant: "destructive",
+                title: `AI Generation Failed for Section ${section.id}`,
+                description: error.message || "An unexpected error occurred. Skipping section.",
+            });
         }
-
-        setEditorContent(editorContainer.innerHTML);
-        handleSectionSelect(selectedSectionForDrafting, "smooth");
-      }
-
-      toast({
-        title: "Draft Generated",
-        description: `Content for section ${selectedSectionForDrafting.id} has been updated.`,
-      });
-    } catch (error: any) {
-      console.error("Error generating draft:", error);
-      toast({
-        variant: "destructive",
-        title: "AI Generation Failed",
-        description:
-          error.message || "An unexpected error occurred. Please try again.",
-      });
-    } finally {
-      setIsGenerating(false);
+        
+        setGenerationProgress(((i + 1) / allSections.length) * 100);
     }
-  };
+    
+    toast({
+      title: "Full Draft Generated",
+      description: `The entire CSR document has been drafted.`,
+    });
 
-  const allSections: Section[] = useMemo(() => {
-    const sections: Section[] = [];
-    const collectSections = (s: Section[]) => {
-      s.forEach(section => {
-        sections.push(section);
-        if (section.children) {
-          collectSections(section.children);
-        }
-      });
-    };
-    collectSections(ichE3Sections);
-    return sections;
-  }, []);
+    setIsGenerating(false);
+    setCurrentSectionTitle("");
+  };
 
   return (
     <div className="h-screen w-screen bg-background text-foreground flex flex-col font-body">
@@ -303,90 +268,41 @@ export default function CsrDraftingPage() {
                 {uploadedFiles.length > 0 && (
                   <div>
                     <Label className="font-medium">
-                      Select active file for drafting:
+                      Active source documents:
                     </Label>
-                    <RadioGroup
-                      value={activeFile || ""}
-                      onValueChange={setActiveFile}
-                      className="mt-2 space-y-1"
-                    >
-                      {uploadedFiles.map((file) => (
-                        <div
-                          key={file.name}
-                          className="flex items-center justify-between p-2 bg-muted/50 rounded-md"
-                        >
-                          <div className="flex items-center space-x-2">
-                            <RadioGroupItem
-                              value={file.name}
-                              id={`radio-${file.name}`}
-                            />
-                            <Label
-                              htmlFor={`radio-${file.name}`}
-                              className="font-normal truncate"
-                            >
-                              {file.name}
-                            </Label>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => removeFile(file.name)}
+                    <ScrollArea className="h-40 mt-2">
+                      <div className="space-y-1 pr-4">
+                        {uploadedFiles.map((file) => (
+                          <div
+                            key={file.name}
+                            className="flex items-center justify-between p-2 bg-muted/50 rounded-md text-sm"
                           >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </div>
-                      ))}
-                    </RadioGroup>
+                            <p className="font-normal truncate">{file.name}</p>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 shrink-0"
+                              onClick={() => removeFile(file.name)}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </ScrollArea>
                   </div>
                 )}
               </div>
 
-              <div className="space-y-4">
-                <Label className="font-semibold text-lg">
-                  2. Select Section to Draft
-                </Label>
-                <Popover open={open} onOpenChange={setOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={open}
-                      className="w-full justify-between"
-                    >
-                      {selectedSectionForDrafting
-                        ? `${selectedSectionForDrafting.id} ${selectedSectionForDrafting.title}`
-                        : "Select a section..."}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[370px] p-0">
-                    <Command>
-                      <CommandInput placeholder="Search section..." />
-                      <CommandList>
-                        <CommandEmpty>No section found.</CommandEmpty>
-                        <CommandGroup>
-                          {allSections.map((section) => (
-                            <CommandItem
-                              key={section.id}
-                              value={`${section.id} ${section.title}`}
-                              onSelect={() => {
-                                setSelectedSectionForDrafting(section);
-                                setOpen(false);
-                              }}
-                              style={{ paddingLeft: `${section.id.split('.').length * 1}rem` }}
-                            >
-                              {section.id} {section.title}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-
               <div className="mt-auto pt-4 border-t">
+                {isGenerating && (
+                  <div className="mb-4 text-center">
+                    <Progress value={generationProgress} className="mb-2" />
+                    <p className="text-sm text-muted-foreground animate-pulse">
+                      Drafting: {currentSectionTitle}
+                    </p>
+                  </div>
+                )}
                 <Button
                   className="w-full"
                   size="lg"
@@ -401,7 +317,7 @@ export default function CsrDraftingPage() {
                   ) : (
                     <>
                       <Wand2 className="mr-2 h-4 w-4" />
-                      Generate Draft
+                      Generate Full Draft
                     </>
                   )}
                 </Button>

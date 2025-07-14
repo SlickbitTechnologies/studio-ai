@@ -39,10 +39,10 @@ const generateCsrDraftPrompt = ai.definePrompt({
     Adhere strictly to the ICH E3 guidelines for the content and structure of the section.
 
     **Instructions:**
-    1.  **Analyze the Source:** Carefully read the provided source document text.
+    1.  **Analyze the Source:** Carefully read the provided source document text. This text may be a combination of multiple documents.
     2.  **Identify Relevant Information:** Extract all information relevant to the specified CSR section.
-    3.  **Draft the Section:** Write a comprehensive draft for the section using the extracted information. The output must be in well-formed HTML. Use appropriate tags like <p>, <ul>, <ol>, <li>, etc. Do not include <html>, <head>, or <body> tags. Do not include the section heading itself in the output.
-    4.  **Handle Insufficient Information:** If the source document does not contain enough information to draft the section, return a single HTML paragraph with the text: "<p>[Insufficient information in source documents to generate this section.]</p>"
+    3.  **Draft the Section:** Write a comprehensive draft for the section using ONLY the extracted information. The output must be in well-formed HTML. Use appropriate tags like <p>, <ul>, <ol>, <li>, etc. Do not include <html>, <head>, or <body> tags. Crucially, DO NOT include the section heading itself in the output.
+    4.  **Handle Insufficient Information:** If the source document does not contain any relevant information to draft the section, return a single HTML paragraph with the text: "<p>[Insufficient information in source documents to generate this section.]</p>"
 
     **CSR Section to Draft:**
     - **Section ID:** {{{sectionId}}}
