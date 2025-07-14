@@ -11,30 +11,23 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, FileText, Pencil } from "lucide-react";
+import { ChevronRight, FileText } from "lucide-react";
 
 interface IchE3NavigatorProps {
   activeSection: Section | null;
   setActiveSection: (section: Section) => void;
-  onSelectForDrafting: (section: Section) => void;
 }
 
 const SectionItem = ({
   section,
   activeSection,
   setActiveSection,
-  onSelectForDrafting,
   level = 0,
 }: {
   section: Section;
   level?: number;
-} & IchE3NavigatorProps) => {
+} & Omit<IchE3NavigatorProps, 'onSelectForDrafting'>) => {
   const isActive = activeSection?.id === section.id;
-
-  const handleSelectForDrafting = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onSelectForDrafting(section);
-  }
 
   if (section.children && section.children.length > 0) {
     return (
@@ -53,9 +46,6 @@ const SectionItem = ({
               <span className="font-semibold truncate">{section.id} {section.title}</span>
             </Button>
           </CollapsibleTrigger>
-           <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100" onClick={handleSelectForDrafting}>
-              <Pencil className="h-3 w-3" />
-            </Button>
         </div>
         <CollapsibleContent>
           <div className="flex flex-col">
@@ -65,7 +55,6 @@ const SectionItem = ({
                 section={child}
                 activeSection={activeSection}
                 setActiveSection={setActiveSection}
-                onSelectForDrafting={onSelectForDrafting}
                 level={level + 1}
               />
             ))}
@@ -85,9 +74,6 @@ const SectionItem = ({
       >
         <span className="truncate">{section.id} {section.title}</span>
       </Button>
-       <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100" onClick={handleSelectForDrafting}>
-         <Pencil className="h-3 w-3" />
-       </Button>
     </div>
   );
 };
@@ -95,7 +81,6 @@ const SectionItem = ({
 export function IchE3Navigator({
   activeSection,
   setActiveSection,
-  onSelectForDrafting,
 }: IchE3NavigatorProps) {
   return (
     <div className="h-full flex flex-col">
@@ -113,7 +98,6 @@ export function IchE3Navigator({
               section={section}
               activeSection={activeSection}
               setActiveSection={setActiveSection}
-              onSelectForDrafting={onSelectForDrafting}
             />
           ))}
         </div>
