@@ -49,6 +49,7 @@ const ToolbarButton = ({
         size="icon"
         className="h-8 w-8"
         onClick={onClick}
+        onMouseDown={(e) => e.preventDefault()} // Prevent editor from losing focus
         disabled={disabled}
       >
         {children}
@@ -66,9 +67,12 @@ export function WordEditor({
 }: WordEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
 
-  const applyFormat = (command: string) => {
-    document.execCommand(command, false);
+  // Note: execCommand is deprecated but is the simplest way to demonstrate functionality
+  // for a prototype. A production app should use a robust rich text editor library.
+  const applyCommand = (command: string, value?: string) => {
+    document.execCommand(command, false, value);
     if (editorRef.current) {
+        editorRef.current.focus();
         setEditorContent(editorRef.current.innerHTML);
     }
   };
@@ -77,53 +81,50 @@ export function WordEditor({
     setEditorContent(e.currentTarget.innerHTML);
   };
   
-  // Note: execCommand is deprecated but is the simplest way to demonstrate functionality
-  // for a prototype. A production app should use a robust rich text editor library.
-
   return (
     <TooltipProvider>
       <div className="h-full flex flex-col rounded-lg border bg-card shadow-sm">
         <div className="p-2 border-b flex items-center flex-wrap gap-1">
-          <ToolbarButton tooltip="Undo (Ctrl+Z)" disabled>
+          <ToolbarButton tooltip="Undo (Ctrl+Z)" onClick={() => applyCommand("undo")}>
             <Undo className="h-4 w-4" />
           </ToolbarButton>
-          <ToolbarButton tooltip="Redo (Ctrl+Y)" disabled>
+          <ToolbarButton tooltip="Redo (Ctrl+Y)" onClick={() => applyCommand("redo")}>
             <Redo className="h-4 w-4" />
           </ToolbarButton>
           <Separator orientation="vertical" className="h-6 mx-1" />
-          <ToolbarButton tooltip="Heading 1" disabled>
+          <ToolbarButton tooltip="Heading 1" onClick={() => applyCommand("formatBlock", "<h1>")}>
             <Heading1 className="h-4 w-4" />
           </ToolbarButton>
-          <ToolbarButton tooltip="Heading 2" disabled>
+          <ToolbarButton tooltip="Heading 2" onClick={() => applyCommand("formatBlock", "<h2>")}>
             <Heading2 className="h-4 w-4" />
           </ToolbarButton>
-          <ToolbarButton tooltip="Heading 3" disabled>
+          <ToolbarButton tooltip="Heading 3" onClick={() => applyCommand("formatBlock", "<h3>")}>
             <Heading3 className="h-4 w-4" />
           </ToolbarButton>
           <Separator orientation="vertical" className="h-6 mx-1" />
           <ToolbarButton
             tooltip="Bold (Ctrl+B)"
-            onClick={() => applyFormat("bold")}
+            onClick={() => applyCommand("bold")}
           >
             <Bold className="h-4 w-4" />
           </ToolbarButton>
           <ToolbarButton
             tooltip="Italic (Ctrl+I)"
-            onClick={() => applyFormat("italic")}
+            onClick={() => applyCommand("italic")}
           >
             <Italic className="h-4 w-4" />
           </ToolbarButton>
           <ToolbarButton
             tooltip="Underline (Ctrl+U)"
-            onClick={() => applyFormat("underline")}
+            onClick={() => applyCommand("underline")}
           >
             <Underline className="h-4 w-4" />
           </ToolbarButton>
           <Separator orientation="vertical" className="h-6 mx-1" />
-          <ToolbarButton tooltip="Bulleted List" disabled>
+          <ToolbarButton tooltip="Bulleted List" onClick={() => applyCommand("insertUnorderedList")}>
             <List className="h-4 w-4" />
           </ToolbarButton>
-          <ToolbarButton tooltip="Numbered List" disabled>
+          <ToolbarButton tooltip="Numbered List" onClick={() => applyCommand("insertOrderedList")}>
             <ListOrdered className="h-4 w-4" />
           </ToolbarButton>
           <ToolbarButton tooltip="Insert Table" disabled>
