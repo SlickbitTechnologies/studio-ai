@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { UploadCloud, FileText, Loader2, Wand2, ChevronDown, Check } from "lucide-react";
 import type { Section } from "@/data/ich-e3-sections";
@@ -20,7 +21,7 @@ import { cn } from "@/lib/utils";
 
 
 interface AiAssistantProps {
-  onGenerateDraft: (fileContents: string[], section: Section) => Promise<void>;
+  onGenerateDraft: (fileContent: string, section: Section) => Promise<void>;
   isLoading: boolean;
   selectedSection: Section | null;
   sections: Section[];
@@ -48,6 +49,7 @@ export function AiAssistant({
   setSelectedSection,
 }: AiAssistantProps) {
   const [files, setFiles] = useState<File[]>([]);
+  const [activeFile, setActiveFile] = useState<string | null>(null);
   const { toast } = useToast();
   const [open, setOpen] = useState(false)
 
@@ -55,16 +57,22 @@ export function AiAssistant({
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
-      setFiles(Array.from(event.target.files));
+      const newFiles = Array.from(event.target.files);
+      setFiles(newFiles);
+      if (newFiles.length > 0 && !activeFile) {
+        setActiveFile(newFiles[0].name);
+      } else if (newFiles.length === 0) {
+        setActiveFile(null);
+      }
     }
   };
 
   const handleGenerateClick = () => {
-    if (files.length === 0) {
+    if (!activeFile) {
       toast({
         variant: "destructive",
-        title: "No Files Uploaded",
-        description: "Please upload at least one source document.",
+        title: "No Active File",
+        description: "Please select a source document to use for drafting.",
       });
       return;
     }
@@ -78,36 +86,38 @@ export function AiAssistant({
           return;
     }
 
-    const fileReadPromises = files.map((file) => {
-      return new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const text = e.target?.result as string;
-          if (text) {
-            resolve(text);
-          } else {
-            reject(new Error(`Could not read file: ${file.name}`));
-          }
-        };
-        reader.onerror = () => {
-          reject(new Error(`Error reading file: ${file.name}`));
-        };
-        reader.readAsText(file);
-      });
-    });
-
-    Promise.all(fileReadPromises)
-      .then((fileContents) => {
-        onGenerateDraft(fileContents, selectedSection);
-      })
-      .catch((error) => {
-        console.error(error);
+    const fileToProcess = files.find(f => f.name === activeFile);
+    if (!fileToProcess) {
         toast({
-          variant: "destructive",
-          title: "File Read Error",
-          description: "An error occurred while reading the files.",
-        });
-      });
+            variant: "destructive",
+            title: "File Not Found",
+            description: "The selected active file could not be found.",
+          });
+          return;
+    }
+
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      if (text) {
+        onGenerateDraft(text, selectedSection);
+      } else {
+        toast({
+            variant: "destructive",
+            title: "File Read Error",
+            description: `Could not read the content of ${fileToProcess.name}.`,
+          });
+      }
+    };
+    reader.onerror = () => {
+        toast({
+            variant: "destructive",
+            title: "File Read Error",
+            description: `An error occurred while reading ${fileToProcess.name}.`,
+          });
+    };
+    reader.readAsText(fileToProcess);
   };
 
   return (
@@ -153,16 +163,21 @@ export function AiAssistant({
           </div>
           {files.length > 0 && (
             <div className="mt-3 space-y-2">
-              <p className="text-sm font-medium">Uploaded Files:</p>
-              {files.map((file, index) => (
-                <div
-                  key={index}
-                  className="flex items-center gap-2 text-sm text-foreground p-2 bg-muted rounded-md"
-                >
-                  <FileText className="h-4 w-4 text-accent" />
-                  <span className="truncate font-medium">{file.name}</span>
-                </div>
-              ))}
+              <p className="text-sm font-medium">Select active source file:</p>
+              <RadioGroup value={activeFile ?? ""} onValueChange={setActiveFile}>
+                {files.map((file, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center gap-2 text-sm text-foreground p-2 bg-muted rounded-md"
+                  >
+                    <RadioGroupItem value={file.name} id={`file-${index}`} className="shrink-0" />
+                    <Label htmlFor={`file-${index}`} className="flex items-center gap-2 cursor-pointer w-full">
+                        <FileText className="h-4 w-4 text-accent" />
+                        <span className="truncate font-medium">{file.name}</span>
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
             </div>
           )}
         </div>
@@ -222,7 +237,7 @@ export function AiAssistant({
             size="lg"
             className="w-full text-base"
             onClick={handleGenerateClick}
-            disabled={isLoading || files.length === 0 || !selectedSection}
+            disabled={isLoading || files.length === 0 || !selectedSection || !activeFile}
           >
             {isLoading ? (
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />

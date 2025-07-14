@@ -25,14 +25,13 @@ export default function CsrDraftingPage() {
   const editorRef = useRef<HTMLDivElement>(null);
 
   const handleGenerateDraft = async (
-    fileContents: string[],
+    fileContent: string,
     section: Section
   ) => {
     setIsLoading(true);
     try {
-      const combinedContent = fileContents.join("\n\n---\n\n");
       const result = await generateCsrDraft({
-        localFileContent: combinedContent,
+        localFileContent: fileContent,
         sectionId: `${section.id} ${section.title}`,
       });
 
