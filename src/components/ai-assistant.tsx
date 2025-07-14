@@ -85,7 +85,7 @@ export function AiAssistant({
           AI Draft Assistant
         </CardTitle>
         <CardDescription>
-          Generate content for the selected section using source documents.
+          Upload documents to generate content for the selected section.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col gap-6">
@@ -120,6 +120,7 @@ export function AiAssistant({
           </div>
           {files.length > 0 && (
             <div className="mt-3 space-y-2">
+              <p className="text-sm font-medium">Uploaded Files:</p>
               {files.map((file, index) => (
                 <div key={index} className="flex items-center gap-2 text-sm text-foreground p-2 bg-muted rounded-md">
                   <FileText className="h-4 w-4 text-accent" />

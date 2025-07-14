@@ -103,9 +103,6 @@ export function WordEditor({
           </ToolbarButton>
         </div>
         <div className="flex-1 p-4 bg-background/50 rounded-b-lg relative">
-          <div className="absolute top-2 right-2 text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded">
-            Note: This is a simplified editor. A real implementation would embed Microsoft Word Online.
-          </div>
           <Textarea
             value={editorContent}
             onChange={(e) => setEditorContent(e.target.value)}
