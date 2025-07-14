@@ -38,9 +38,13 @@ export async function generateFullCsrDraft(input: GenerateFullCsrDraftInput): Pr
   return generateFullCsrDraftFlow(input);
 }
 
+const GenerateFullCsrDraftPromptInputSchema = GenerateFullCsrDraftInputSchema.extend({
+    ichE3Structure: z.string(),
+});
+
 const generateFullCsrDraftPrompt = ai.definePrompt({
   name: 'generateFullCsrDraftPrompt',
-  input: {schema: GenerateFullCsrDraftInputSchema},
+  input: {schema: GenerateFullCsrDraftPromptInputSchema},
   output: {schema: GenerateFullCsrDraftOutputSchema},
   prompt: `You are an expert medical writer tasked with creating a comprehensive first draft of a Clinical Study Report (CSR).
   Your response must be a single, well-formatted HTML document.
@@ -66,9 +70,6 @@ const generateFullCsrDraftPrompt = ai.definePrompt({
 
   Now, generate the full CSR draft as a single HTML document.
 `,
-  custom: {
-    ichE3Structure: ichE3Structure,
-  }
 });
 
 const generateFullCsrDraftFlow = ai.defineFlow(
@@ -78,7 +79,10 @@ const generateFullCsrDraftFlow = ai.defineFlow(
     outputSchema: GenerateFullCsrDraftOutputSchema,
   },
   async input => {
-    const {output} = await generateFullCsrDraftPrompt(input);
+    const {output} = await generateFullCsrDraftPrompt({
+        ...input,
+        ichE3Structure: ichE3Structure,
+    });
     return { fullDraft: output!.fullDraft };
   }
 );
