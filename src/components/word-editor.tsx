@@ -11,8 +11,6 @@ import {
   Heading2,
   Heading3,
   Table,
-  MessageSquare,
-  Repeat,
   Undo,
   Redo,
 } from "lucide-react";
@@ -203,14 +201,6 @@ export function WordEditor({
               <TableSelector onSelect={insertTable} />
             </PopoverContent>
           </Popover>
-
-          <Separator orientation="vertical" className="h-6 mx-1" />
-          <ToolbarButton tooltip="Track Changes" disabled>
-            <Repeat className="h-4 w-4" />
-          </ToolbarButton>
-          <ToolbarButton tooltip="Comments" disabled>
-            <MessageSquare className="h-4 w-4" />
-          </ToolbarButton>
         </div>
         <div className="flex-1 p-4 bg-background/50 rounded-b-lg relative overflow-y-auto">
           <div
