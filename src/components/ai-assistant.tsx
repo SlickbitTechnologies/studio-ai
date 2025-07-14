@@ -17,7 +17,7 @@ import { UploadCloud, FileText, Loader2, Wand2 } from "lucide-react";
 
 interface AiAssistantProps {
   activeSection: Section | null;
-  onGenerateDraft: (fileContent: string) => Promise<void>;
+  onGenerateDraft: (fileContents: string[]) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -26,47 +26,55 @@ export function AiAssistant({
   onGenerateDraft,
   isLoading,
 }: AiAssistantProps) {
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const { toast } = useToast();
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = event.target.files?.[0];
-    if (selectedFile) {
-      setFile(selectedFile);
+    if (event.target.files) {
+      setFiles(Array.from(event.target.files));
     }
   };
 
   const handleGenerateClick = () => {
-    if (!file) {
+    if (files.length === 0) {
       toast({
         variant: "destructive",
-        title: "No File Uploaded",
-        description: "Please upload a source document first.",
+        title: "No Files Uploaded",
+        description: "Please upload at least one source document.",
       });
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const text = e.target?.result as string;
-      if (text) {
-        await onGenerateDraft(text);
-      } else {
-        toast({
-          variant: "destructive",
-          title: "File Read Error",
-          description: "Could not read the content of the uploaded file.",
-        });
-      }
-    };
-    reader.onerror = () => {
+    const fileReadPromises = files.map(file => {
+      return new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const text = e.target?.result as string;
+          if (text) {
+            resolve(text);
+          } else {
+            reject(new Error(`Could not read file: ${file.name}`));
+          }
+        };
+        reader.onerror = () => {
+          reject(new Error(`Error reading file: ${file.name}`));
+        };
+        reader.readAsText(file);
+      });
+    });
+
+    Promise.all(fileReadPromises)
+      .then(fileContents => {
+        onGenerateDraft(fileContents);
+      })
+      .catch(error => {
+        console.error(error);
         toast({
             variant: "destructive",
             title: "File Read Error",
-            description: "An error occurred while reading the file.",
+            description: "An error occurred while reading the files.",
           });
-    }
-    reader.readAsText(file);
+      });
   };
 
   return (
@@ -77,14 +85,13 @@ export function AiAssistant({
           AI Draft Assistant
         </CardTitle>
         <CardDescription>
-          Generate content for the selected section using a source document.
-          Your files are processed locally and never stored.
+          Generate content for the selected section using source documents.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col gap-6">
         <div>
           <Label htmlFor="file-upload" className="font-medium">
-            1. Upload Source Document
+            Upload Source Document(s)
           </Label>
           <div className="mt-2">
             <Label
@@ -107,28 +114,20 @@ export function AiAssistant({
                 className="sr-only"
                 onChange={handleFileChange}
                 accept=".pdf,.docx,.txt"
+                multiple
               />
             </Label>
           </div>
-          {file && (
-            <div className="mt-3 flex items-center gap-2 text-sm text-foreground p-2 bg-muted rounded-md">
-              <FileText className="h-4 w-4 text-accent" />
-              <span className="truncate font-medium">{file.name}</span>
+          {files.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {files.map((file, index) => (
+                <div key={index} className="flex items-center gap-2 text-sm text-foreground p-2 bg-muted rounded-md">
+                  <FileText className="h-4 w-4 text-accent" />
+                  <span className="truncate font-medium">{file.name}</span>
+                </div>
+              ))}
             </div>
           )}
-        </div>
-
-        <div>
-          <p className="font-medium mb-2">2. Select Section</p>
-          <div className="w-full p-3 text-sm rounded-md border bg-muted/50">
-            {activeSection ? (
-              <p className="font-semibold text-foreground truncate">
-                <span className="font-mono text-accent">{activeSection.id}</span> {activeSection.title}
-              </p>
-            ) : (
-              <p className="text-muted-foreground">No section selected</p>
-            )}
-          </div>
         </div>
 
         <div className="mt-auto">
@@ -136,7 +135,7 @@ export function AiAssistant({
             size="lg"
             className="w-full text-base"
             onClick={handleGenerateClick}
-            disabled={isLoading || !file || !activeSection}
+            disabled={isLoading || files.length === 0 || !activeSection}
           >
             {isLoading ? (
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />

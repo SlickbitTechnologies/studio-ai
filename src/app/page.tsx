@@ -13,12 +13,12 @@ import { AiAssistant } from "@/components/ai-assistant";
 export default function CsrDraftingPage() {
   const [activeSection, setActiveSection] = useState<Section | null>(null);
   const [editorContent, setEditorContent] = useState<string>(
-    'Welcome to CSR DraftWise!\n\nSelect a section from the left navigation, upload a source document on the right, and click "Generate Draft" to get started.'
+    'Welcome to CSR DraftWise!\n\nSelect a section from the left navigation, upload source document(s) on the right, and click "Generate Draft" to get started.'
   );
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const { toast } = useToast();
 
-  const handleGenerateDraft = async (fileContent: string) => {
+  const handleGenerateDraft = async (fileContents: string[]) => {
     if (!activeSection) {
       toast({
         variant: "destructive",
@@ -30,9 +30,11 @@ export default function CsrDraftingPage() {
 
     setIsLoading(true);
     try {
+      // Joining contents of all files. A more sophisticated implementation could handle them separately.
+      const combinedContent = fileContents.join("\n\n---\n\n");
       const result = await generateCsrDraft({
         sectionId: `${activeSection.id} - ${activeSection.title}`,
-        localFileContent: fileContent,
+        localFileContent: combinedContent,
       });
 
       const draft = `\n\n------------------------------\nDRAFT FOR: ${activeSection.id} ${activeSection.title}\n------------------------------\n\n${result.draftContent}`;
