@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import type { Section } from "@/data/ich-e3-sections";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,13 +15,11 @@ import { useToast } from "@/hooks/use-toast";
 import { UploadCloud, FileText, Loader2, Wand2 } from "lucide-react";
 
 interface AiAssistantProps {
-  activeSection: Section | null;
   onGenerateDraft: (fileContents: string[]) => Promise<void>;
   isLoading: boolean;
 }
 
 export function AiAssistant({
-  activeSection,
   onGenerateDraft,
   isLoading,
 }: AiAssistantProps) {
@@ -85,7 +82,7 @@ export function AiAssistant({
           AI Draft Assistant
         </CardTitle>
         <CardDescription>
-          Upload documents to generate content for the selected section.
+          Upload documents to generate a full CSR draft.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col gap-6">
@@ -136,14 +133,14 @@ export function AiAssistant({
             size="lg"
             className="w-full text-base"
             onClick={handleGenerateClick}
-            disabled={isLoading || files.length === 0 || !activeSection}
+            disabled={isLoading || files.length === 0}
           >
             {isLoading ? (
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
             ) : (
               <Wand2 className="mr-2 h-5 w-5" />
             )}
-            Generate Draft
+            Generate Full Draft
           </Button>
         </div>
       </CardContent>

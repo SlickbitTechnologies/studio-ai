@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { FileText, BotMessageSquare, BrainCircuit } from "lucide-react";
-import { generateCsrDraft } from "@/ai/flows/generate-csr-draft";
+import { useState, useRef, useEffect } from "react";
+import { BrainCircuit } from "lucide-react";
+import { generateFullCsrDraft } from "@/ai/flows/generate-full-csr-draft";
 import { useToast } from "@/hooks/use-toast";
 
 import type { Section } from "@/data/ich-e3-sections";
@@ -13,39 +13,28 @@ import { AiAssistant } from "@/components/ai-assistant";
 export default function CsrDraftingPage() {
   const [activeSection, setActiveSection] = useState<Section | null>(null);
   const [editorContent, setEditorContent] = useState<string>(
-    'Welcome to CSR DraftWise!<br><br>Select a section from the left navigation, upload source document(s) on the right, and click "Generate Draft" to get started.'
+    '<h1>Welcome to CSR DraftWise!</h1><p>To get started, upload your source document(s) using the panel on the right, then click "Generate Full Draft".</p>'
   );
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const { toast } = useToast();
+  const editorRef = useRef<HTMLDivElement>(null);
 
   const handleGenerateDraft = async (fileContents: string[]) => {
-    if (!activeSection) {
-      toast({
-        variant: "destructive",
-        title: "No Section Selected",
-        description: "Please select a CSR section from the left panel first.",
-      });
-      return;
-    }
-
     setIsLoading(true);
     try {
-      // Joining contents of all files. A more sophisticated implementation could handle them separately.
-      const combinedContent = fileContents.join("\\n\\n---\\n\\n");
-      const result = await generateCsrDraft({
-        sectionId: `${activeSection.id} - ${activeSection.title}`,
-        localFileContent: combinedContent,
+      const combinedContent = fileContents.join("\n\n---\n\n");
+      const result = await generateFullCsrDraft({
+        documentContents: combinedContent,
       });
 
-      const draft = `<br><br><hr><strong>DRAFT FOR: ${activeSection.id} ${activeSection.title}</strong><hr><br>${result.draftContent}`;
-      setEditorContent((prev) => prev + draft);
+      setEditorContent(result.fullDraft);
 
       toast({
-        title: "Draft Generated",
-        description: `AI draft for section ${activeSection.id} has been added to the editor.`,
+        title: "Full Draft Generated",
+        description: `The complete CSR draft has been generated in the editor.`,
       });
     } catch (error) {
-      console.error("Error generating draft:", error);
+      console.error("Error generating full draft:", error);
       toast({
         variant: "destructive",
         title: "Generation Failed",
@@ -54,6 +43,23 @@ export default function CsrDraftingPage() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSectionSelect = (section: Section) => {
+    setActiveSection(section);
+    const editorContainer = editorRef.current;
+    if (!editorContainer) return;
+
+    const targetElement = editorContainer.querySelector(`#section-${section.id}`);
+    if (targetElement) {
+      targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+        toast({
+            variant: "default",
+            title: "Section not found",
+            description: `Draft for section ${section.id} may not have been generated yet.`
+        })
     }
   };
 
@@ -71,12 +77,13 @@ export default function CsrDraftingPage() {
         <aside className="w-[320px] shrink-0 border-r bg-card/50">
           <IchE3Navigator
             activeSection={activeSection}
-            setActiveSection={setActiveSection}
+            setActiveSection={handleSectionSelect}
           />
         </aside>
 
         <main className="flex-1 flex flex-col p-4 gap-4">
           <WordEditor
+            ref={editorRef}
             editorContent={editorContent}
             setEditorContent={setEditorContent}
           />
@@ -84,7 +91,6 @@ export default function CsrDraftingPage() {
 
         <aside className="w-[380px] shrink-0 border-l bg-card/50 p-4">
           <AiAssistant
-            activeSection={activeSection}
             onGenerateDraft={handleGenerateDraft}
             isLoading={isLoading}
           />
