@@ -48,6 +48,9 @@ function getInitialEditorContent(): string {
   return content;
 }
 
+// Helper function to introduce a delay
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export default function CsrDraftingPage() {
   const [activeSection, setActiveSection] = useState<Section | null>(null);
   const [editorContent, setEditorContent] = useState<string>(
@@ -115,8 +118,7 @@ export default function CsrDraftingPage() {
           const result = await mammoth.extractRawText({ arrayBuffer });
           content = result.value;
         } else {
-           // This case should ideally not be hit with the updated accept attribute
-          toast({ variant: "destructive", title: "Unsupported File", description: `Could not process ${file.name}. Only PDF and DOCX are supported.` });
+           toast({ variant: "destructive", title: "Unsupported File", description: `Could not process ${file.name}. Only PDF and DOCX are supported.` });
           continue;
         }
         
@@ -155,6 +157,9 @@ export default function CsrDraftingPage() {
       setCurrentSectionTitle(`${section.id} ${section.title}`);
       
       try {
+        // Add a delay to avoid hitting rate limits
+        if (i > 0) await sleep(1500); // 1.5-second delay between requests
+
         const response = await generateCsrDraft({
           sectionId: section.id,
           sectionTitle: section.title,
@@ -162,6 +167,8 @@ export default function CsrDraftingPage() {
         });
 
         const { draft } = response;
+        
+        // Use a temporary DOM element to safely manipulate HTML
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = currentEditorContent;
         
@@ -170,6 +177,7 @@ export default function CsrDraftingPage() {
         if (placeholder) {
            placeholder.outerHTML = draft;
            currentEditorContent = tempDiv.innerHTML;
+           setEditorContent(currentEditorContent); // Update state to re-render editor
         }
 
       } catch (error: any) {
@@ -179,12 +187,10 @@ export default function CsrDraftingPage() {
           title: `AI Generation Failed for ${section.id}`,
           description: error.message || "An unexpected error occurred. Continuing to next section.",
         });
-        // Continue to the next section even if one fails
       }
 
       const progress = Math.round(((i + 1) / allSections.length) * 100);
       setGenerationProgress(progress);
-      setEditorContent(currentEditorContent); // Update editor after each section
     }
 
     toast({
@@ -239,6 +245,7 @@ export default function CsrDraftingPage() {
                   <Button
                     variant="outline"
                     onClick={() => fileInputRef.current?.click()}
+                    disabled={isGenerating}
                   >
                     <Upload className="mr-2 h-4 w-4" />
                     Upload Files
@@ -276,6 +283,7 @@ export default function CsrDraftingPage() {
                                 size="icon"
                                 className="h-7 w-7 shrink-0"
                                 onClick={() => removeFile(file.name)}
+                                disabled={isGenerating}
                               >
                                 <Trash2 className="h-4 w-4 text-destructive" />
                               </Button>
