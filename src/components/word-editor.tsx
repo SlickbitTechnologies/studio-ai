@@ -18,6 +18,9 @@ import {
   AlignCenter,
   AlignRight,
   AlignJustify,
+  Strikethrough,
+  ChevronDown,
+  Type,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -33,6 +36,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
 interface WordEditorProps {
@@ -133,6 +142,18 @@ export const WordEditor = forwardRef<HTMLDivElement, WordEditorProps>(
       setIsTablePopoverOpen(false);
     };
 
+    const FONT_FACES = ["Arial", "Courier New", "Georgia", "Times New Roman", "Trebuchet MS", "Verdana"];
+    const FONT_SIZES = [
+        { label: "8", value: "1" },
+        { label: "10", value: "2" },
+        { label: "12", value: "3" },
+        { label: "14", value: "4" },
+        { label: "18", value: "5" },
+        { label: "24", value: "6" },
+        { label: "36", value: "7" },
+    ];
+
+
     return (
       <TooltipProvider>
         <div className="h-full flex flex-col rounded-lg border bg-card shadow-sm">
@@ -144,15 +165,75 @@ export const WordEditor = forwardRef<HTMLDivElement, WordEditorProps>(
               <Redo className="h-4 w-4" />
             </ToolbarButton>
             <Separator orientation="vertical" className="h-6 mx-1" />
-            <ToolbarButton tooltip="Heading 1" onClick={() => applyCommand("formatBlock", "<h1>")}>
-              <Heading1 className="h-4 w-4" />
-            </ToolbarButton>
-            <ToolbarButton tooltip="Heading 2" onClick={() => applyCommand("formatBlock", "<h2>")}>
-              <Heading2 className="h-4 w-4" />
-            </ToolbarButton>
-            <ToolbarButton tooltip="Heading 3" onClick={() => applyCommand("formatBlock", "<h3>")}>
-              <Heading3 className="h-4 w-4" />
-            </ToolbarButton>
+
+            <DropdownMenu>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-auto px-2">
+                                Text Styles
+                                <ChevronDown className="h-4 w-4 ml-1"/>
+                            </Button>
+                        </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Text Styles</p></TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent>
+                    <DropdownMenuItem onMouseDown={(e) => e.preventDefault()} onClick={() => applyCommand("formatBlock", "<p>")}>Normal Text</DropdownMenuItem>
+                    <DropdownMenuItem onMouseDown={(e) => e.preventDefault()} onClick={() => applyCommand("formatBlock", "<h1>")}>
+                        <Heading1 className="h-4 w-4 mr-2"/> Heading 1
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onMouseDown={(e) => e.preventDefault()} onClick={() => applyCommand("formatBlock", "<h2>")}>
+                        <Heading2 className="h-4 w-4 mr-2"/> Heading 2
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onMouseDown={(e) => e.preventDefault()} onClick={() => applyCommand("formatBlock", "<h3>")}>
+                        <Heading3 className="h-4 w-4 mr-2"/> Heading 3
+                    </DropdownMenuItem>
+                </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-auto px-2">
+                                Font
+                                <ChevronDown className="h-4 w-4 ml-1"/>
+                            </Button>
+                        </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Font Family</p></TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent>
+                    {FONT_FACES.map(font => (
+                         <DropdownMenuItem key={font} onMouseDown={(e) => e.preventDefault()} onClick={() => applyCommand("fontName", font)}>
+                            <span style={{fontFamily: font}}>{font}</span>
+                        </DropdownMenuItem>
+                    ))}
+                </DropdownMenuContent>
+            </DropdownMenu>
+
+             <DropdownMenu>
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-auto px-2">
+                                Size
+                                <ChevronDown className="h-4 w-4 ml-1"/>
+                            </Button>
+                        </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent><p>Font Size</p></TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent>
+                    {FONT_SIZES.map(size => (
+                         <DropdownMenuItem key={size.value} onMouseDown={(e) => e.preventDefault()} onClick={() => applyCommand("fontSize", size.value)}>
+                            {size.label}
+                        </DropdownMenuItem>
+                    ))}
+                </DropdownMenuContent>
+            </DropdownMenu>
+
             <Separator orientation="vertical" className="h-6 mx-1" />
             <ToolbarButton
               tooltip="Bold (Ctrl+B)"
@@ -171,6 +252,12 @@ export const WordEditor = forwardRef<HTMLDivElement, WordEditorProps>(
               onClick={() => applyCommand("underline")}
             >
               <Underline className="h-4 w-4" />
+            </ToolbarButton>
+            <ToolbarButton
+              tooltip="Strikethrough"
+              onClick={() => applyCommand("strikeThrough")}
+            >
+              <Strikethrough className="h-4 w-4" />
             </ToolbarButton>
             <Separator orientation="vertical" className="h-6 mx-1" />
             <ToolbarButton tooltip="Bulleted List" onClick={() => applyCommand("insertUnorderedList")}>
@@ -232,3 +319,5 @@ export const WordEditor = forwardRef<HTMLDivElement, WordEditorProps>(
 );
 
 WordEditor.displayName = "WordEditor";
+
+    
