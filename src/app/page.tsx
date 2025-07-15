@@ -52,6 +52,29 @@ function getInitialEditorContent(): string {
 // Helper function to introduce a delay
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Retry logic with exponential backoff for handling API errors
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  retries = 3,
+  initialDelay = 5000
+): Promise<T> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      if ((err.message.includes('429') || err.message.includes('503')) && i < retries - 1) {
+        const delay = initialDelay * Math.pow(2, i);
+        console.warn(`Attempt ${i + 1} failed. Retrying in ${delay}ms...`);
+        await sleep(delay);
+      } else {
+        throw err;
+      }
+    }
+  }
+  throw new Error("Function failed after multiple retries.");
+}
+
+
 export default function CsrDraftingPage() {
   const [activeSection, setActiveSection] = useState<Section | null>(null);
   const [editorContent, setEditorContent] = useState<string>(
@@ -157,63 +180,45 @@ export default function CsrDraftingPage() {
     let currentEditorContent = getInitialEditorContent();
     setEditorContent(currentEditorContent);
     
-    const BATCH_SIZE = 5;
-    const DELAY_BETWEEN_BATCHES = 5000; // 5 seconds
     const failedSections: string[] = [];
-    let processedCount = 0;
-    const totalBatches = Math.ceil(allSections.length / BATCH_SIZE);
   
-    for (let i = 0; i < allSections.length; i += BATCH_SIZE) {
-      const batch = allSections.slice(i, i + BATCH_SIZE);
-      const batchNumber = (i / BATCH_SIZE) + 1;
-      setCurrentSectionTitle(`Processing batch ${batchNumber} of ${totalBatches}...`);
+    for (let i = 0; i < allSections.length; i++) {
+      const section = allSections[i];
+      setCurrentSectionTitle(`Generating section ${section.id}: ${section.title}`);
   
-      const batchPromises = batch.map(section => 
-        generateCsrDraft({
-          sectionId: section.id,
-          sectionTitle: section.title,
-          sourceText: combinedSourceText,
-        }).then(response => ({ id: section.id, draft: response.draft, status: 'fulfilled' }))
-          .catch(error => {
-            console.error(`Error generating draft for section ${section.id}:`, error);
-            failedSections.push(section.id);
-            return { id: section.id, draft: null, status: 'rejected' };
+      try {
+        const response = await retryWithBackoff(() => 
+          generateCsrDraft({
+            sectionId: section.id,
+            sectionTitle: section.title,
+            sourceText: combinedSourceText,
           })
-      );
-  
-      const results = await Promise.all(batchPromises);
-      
-      // Use a temporary DOM element to safely update content
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = currentEditorContent;
-  
-      results.forEach(result => {
-        if (result.status === 'fulfilled' && result.draft) {
-          const placeholder = tempDiv.querySelector(`[data-placeholder-for="section-${result.id}"]`);
-          if (placeholder) {
-            placeholder.outerHTML = result.draft;
-          }
+        );
+        
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = currentEditorContent;
+        const placeholder = tempDiv.querySelector(`[data-placeholder-for="section-${section.id}"]`);
+        if (placeholder) {
+          placeholder.outerHTML = response.draft;
         }
-      });
+        currentEditorContent = tempDiv.innerHTML;
+        setEditorContent(currentEditorContent);
   
-      currentEditorContent = tempDiv.innerHTML;
-      setEditorContent(currentEditorContent);
-  
-      processedCount += batch.length;
-      const progress = Math.round((processedCount / allSections.length) * 100);
-      setGenerationProgress(progress);
-
-      // Add delay between batches, but not after the last one
-      if (batchNumber < totalBatches) {
-        await sleep(DELAY_BETWEEN_BATCHES);
+      } catch (error) {
+        console.error(`Error generating draft for section ${section.id} after retries:`, error);
+        failedSections.push(section.id);
       }
+  
+      const progress = Math.round(((i + 1) / allSections.length) * 100);
+      setGenerationProgress(progress);
     }
   
     if (failedSections.length > 0) {
       toast({
         variant: "destructive",
         title: "Draft Generation Partially Complete",
-        description: `Failed to generate ${failedSections.length} section(s): ${failedSections.join(', ')}.`,
+        description: `Failed to generate ${failedSections.length} section(s): ${failedSections.join(', ')}. Please review the document.`,
+        duration: 9000,
       });
     } else {
       toast({
@@ -225,7 +230,6 @@ export default function CsrDraftingPage() {
     setIsGenerating(false);
     setCurrentSectionTitle("");
   };
-  
 
   return (
     <div className="h-screen w-screen bg-background text-foreground flex flex-col font-body">
@@ -397,4 +401,5 @@ export default function CsrDraftingPage() {
       </div>
     </div>
   );
-}
+
+    
