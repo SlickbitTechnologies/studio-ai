@@ -148,57 +148,90 @@ export default function CsrDraftingPage() {
 
   const handleGenerateFullDraft = async () => {
     if (!canGenerate) return;
-
+  
     setIsGenerating(true);
     setGenerationProgress(0);
-
-    const combinedSourceText = uploadedFiles.map(f => f.content).join("\n\n---\n\n");
-    let currentEditorContent = editorContent;
-
+  
+    const combinedSourceText = uploadedFiles.map((f) => f.content).join("\n\n---\n\n");
+    let currentEditorContent = getInitialEditorContent(); // Start with fresh content
+    setEditorContent(currentEditorContent);
+  
     for (let i = 0; i < allSections.length; i++) {
       const section = allSections[i];
       setCurrentSectionTitle(`${section.id} ${section.title}`);
       
-      try {
-        if (i > 0) await sleep(5000); 
-
-        const response = await generateCsrDraft({
-          sectionId: section.id,
-          sectionTitle: section.title,
-          sourceText: combinedSourceText,
-        });
-
-        const { draft } = response;
-        
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = currentEditorContent;
-        
-        const placeholder = tempDiv.querySelector(`[data-placeholder-for="section-${section.id}"]`);
-
-        if (placeholder) {
-           placeholder.outerHTML = draft;
-           currentEditorContent = tempDiv.innerHTML;
-           setEditorContent(currentEditorContent);
+      let success = false;
+      let retries = 0;
+      const maxRetries = 3;
+      
+      while (!success && retries < maxRetries) {
+        try {
+          // Add delay before the first attempt (except for the very first section) and all retries
+          if (i > 0 || retries > 0) {
+            const delay = 5000 * (retries + 1); // 5s, 10s, 15s
+            await sleep(delay);
+          }
+  
+          const response = await generateCsrDraft({
+            sectionId: section.id,
+            sectionTitle: section.title,
+            sourceText: combinedSourceText,
+          });
+  
+          const { draft } = response;
+          
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = currentEditorContent;
+          const placeholder = tempDiv.querySelector(`[data-placeholder-for="section-${section.id}"]`);
+  
+          if (placeholder) {
+             placeholder.outerHTML = draft;
+             currentEditorContent = tempDiv.innerHTML;
+             setEditorContent(currentEditorContent);
+          }
+          success = true;
+  
+        } catch (error: any) {
+          const errorMessage = error.message || "An unexpected error occurred.";
+          console.error(`Error generating draft for section ${section.id}:`, errorMessage);
+  
+          // Check for specific rate limit or overload errors
+          if (errorMessage.includes('429') || errorMessage.includes('503')) {
+            retries++;
+            if (retries < maxRetries) {
+              toast({
+                variant: "destructive",
+                title: `AI Generation Paused for ${section.id}`,
+                description: `Model is busy. Retrying in ${5 * retries} seconds... (Attempt ${retries}/${maxRetries})`,
+              });
+            } else {
+              toast({
+                variant: "destructive",
+                title: `AI Generation Failed for ${section.id}`,
+                description: `The model is currently unavailable after multiple retries. Skipping section.`,
+              });
+            }
+          } else {
+            // For other errors, fail immediately
+            toast({
+              variant: "destructive",
+              title: `AI Generation Failed for ${section.id}`,
+              description: "An unexpected error occurred. Continuing to next section.",
+            });
+            retries = maxRetries; // exit loop
+          }
         }
-
-      } catch (error: any) {
-        console.error(`Error generating draft for section ${section.id}:`, error);
-        toast({
-          variant: "destructive",
-          title: `AI Generation Failed for ${section.id}`,
-          description: error.message || "An unexpected error occurred. Continuing to next section.",
-        });
       }
-
+  
       const progress = Math.round(((i + 1) / allSections.length) * 100);
       setGenerationProgress(progress);
     }
-
+  
     toast({
       title: "Full Draft Generation Complete",
       description: "All sections have been processed.",
     });
-
+  
     setIsGenerating(false);
     setCurrentSectionTitle("");
   };
@@ -373,5 +406,4 @@ export default function CsrDraftingPage() {
       </div>
     </div>
   );
-
-    
+}
