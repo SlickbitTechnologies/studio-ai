@@ -17,8 +17,6 @@ import { IchE3Navigator } from "@/components/ich-e3-navigator";
 import { WordEditor } from "@/components/word-editor";
 
 import { generateCsrDraft } from "@/ai/flows/generate-csr-draft";
-import { mapContentToSections } from "@/ai/flows/map-content-to-sections";
-import type { ContentMappingOutput } from "@/ai/flows/map-content-to-sections";
 
 import * as pdfjs from "pdfjs-dist";
 import mammoth from "mammoth";
@@ -60,14 +58,13 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   retries = 3,
-  initialDelay = 15000 // Increased initial delay to 15 seconds
+  initialDelay = 15000 // 15 seconds
 ): Promise<T> {
   for (let i = 0; i < retries; i++) {
     try {
       return await fn();
     } catch (err: any) {
       if ((err.message.includes('429') || err.message.includes('503')) && i < retries - 1) {
-        // Use a more aggressive backoff factor
         const delay = initialDelay * (i + 1);
         console.warn(`Attempt ${i + 1} failed due to rate limit/service availability. Retrying in ${delay / 1000}s...`);
         await sleep(delay);
@@ -182,73 +179,52 @@ export default function CsrDraftingPage() {
     setEditorContent(currentEditorContent);
     const failedSections: string[] = [];
   
-    // Step 1: Map Content to Sections with retry logic
-    setCurrentSectionTitle("Step 1 of 2: Analyzing source documents...");
-    setGenerationProgress(10); // Initial progress for analysis step
+    setCurrentSectionTitle("Drafting sections...");
+    setGenerationProgress(0);
     
     const combinedSourceText = uploadedFiles.map((f) => f.content).join("\n\n---\n\n");
-    let contentMap: ContentMappingOutput;
     
-    try {
-      contentMap = await retryWithBackoff(() => 
-        mapContentToSections({
-          sourceText: combinedSourceText,
-          sections: allSections.map(s => ({ id: s.id, title: s.title })),
-        })
-      );
-      setGenerationProgress(30); // Progress after successful analysis
-    } catch (error) {
-      console.error("Error during content mapping after retries:", error);
-      toast({
-        variant: "destructive",
-        title: "Analysis Failed",
-        description: "Could not analyze source documents even after multiple retries. Please check your API quota or try again later.",
-        duration: 9000,
-      });
-      setIsGenerating(false);
-      return;
-    }
-    
-    // Step 2: Generate Draft for Each Section
-    setCurrentSectionTitle("Step 2 of 2: Drafting sections...");
-    
-    const sectionMappings = contentMap.sectionMappings;
-    
-    for (let i = 0; i < sectionMappings.length; i++) {
-      const mapping = sectionMappings[i];
-      setCurrentSectionTitle(`Drafting section ${mapping.sectionId}: ${mapping.sectionTitle}`);
+    for (let i = 0; i < allSections.length; i++) {
+      const section = allSections[i];
+      setCurrentSectionTitle(`Drafting section ${section.id}: ${section.title}`);
   
-      // Skip drafting if no relevant text was found
-      if (!mapping.relevantText || mapping.relevantText.trim() === "") {
-          const progress = 30 + Math.round(((i + 1) / sectionMappings.length) * 70);
-          setGenerationProgress(progress);
-          continue;
-      }
-
       try {
         const response = await retryWithBackoff(() => 
           generateCsrDraft({
-            sectionId: mapping.sectionId,
-            sectionTitle: mapping.sectionTitle,
-            sourceText: mapping.relevantText, // Use mapped text
+            sectionId: section.id,
+            sectionTitle: section.title,
+            sourceText: combinedSourceText,
           })
         );
         
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = currentEditorContent;
-        const placeholder = tempDiv.querySelector(`[data-placeholder-for="section-${mapping.sectionId}"]`);
+        const placeholder = tempDiv.querySelector(`[data-placeholder-for="section-${section.id}"]`);
+        
         if (placeholder) {
-          placeholder.outerHTML = response.draft;
+          // Replace placeholder with the generated draft
+          const draftContainer = document.createElement('div');
+          draftContainer.innerHTML = response.draft;
+          // Ensure we don't insert an empty container if the draft is just the insufficient info message
+          if (draftContainer.textContent?.trim() !== '[Insufficient information in source documents to generate this section.]') {
+             placeholder.outerHTML = response.draft;
+          } else {
+             // If info is insufficient, we can leave the placeholder or remove it.
+             // Here, we'll leave the original placeholder text but remove the data attribute.
+             const p = document.createElement('p');
+             p.innerHTML = `[Insufficient information in source documents to generate section ${section.id}.]`;
+             placeholder.replaceWith(p);
+          }
         }
         currentEditorContent = tempDiv.innerHTML;
         setEditorContent(currentEditorContent);
   
       } catch (error) {
-        console.error(`Error generating draft for section ${mapping.sectionId} after retries:`, error);
-        failedSections.push(mapping.sectionId);
+        console.error(`Error generating draft for section ${section.id} after retries:`, error);
+        failedSections.push(section.id);
       }
   
-      const progress = 30 + Math.round(((i + 1) / sectionMappings.length) * 70);
+      const progress = Math.round(((i + 1) / allSections.length) * 100);
       setGenerationProgress(progress);
     }
   
@@ -398,7 +374,7 @@ export default function CsrDraftingPage() {
                     2. Generate Full Draft
                   </Label>
                   <p className="text-sm text-muted-foreground">
-                      Click the button below to generate a draft for the entire report. The AI will first analyze all documents, then draft each section.
+                      Click the button below to generate a draft for the entire report. The AI will draft each section sequentially.
                   </p>
                 </div>
 
@@ -441,8 +417,3 @@ export default function CsrDraftingPage() {
     </div>
   );
 }
-
-    
-
-    
-
