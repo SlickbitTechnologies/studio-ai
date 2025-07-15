@@ -1,3 +1,4 @@
+
 "use client";
 
 import { forwardRef, useState } from "react";
@@ -13,6 +14,10 @@ import {
   Table,
   Undo,
   Redo,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -174,7 +179,20 @@ export const WordEditor = forwardRef<HTMLDivElement, WordEditorProps>(
             <ToolbarButton tooltip="Numbered List" onClick={() => applyCommand("insertOrderedList")}>
               <ListOrdered className="h-4 w-4" />
             </ToolbarButton>
-            
+            <Separator orientation="vertical" className="h-6 mx-1" />
+            <ToolbarButton tooltip="Align Left" onClick={() => applyCommand("justifyLeft")}>
+              <AlignLeft className="h-4 w-4" />
+            </ToolbarButton>
+            <ToolbarButton tooltip="Align Center" onClick={() => applyCommand("justifyCenter")}>
+              <AlignCenter className="h-4 w-4" />
+            </ToolbarButton>
+            <ToolbarButton tooltip="Align Right" onClick={() => applyCommand("justifyRight")}>
+              <AlignRight className="h-4 w-4" />
+            </ToolbarButton>
+            <ToolbarButton tooltip="Justify" onClick={() => applyCommand("justifyFull")}>
+              <AlignJustify className="h-4 w-4" />
+            </ToolbarButton>
+            <Separator orientation="vertical" className="h-6 mx-1" />
             <Popover open={isTablePopoverOpen} onOpenChange={setIsTablePopoverOpen}>
               <Tooltip>
                 <TooltipTrigger asChild>
