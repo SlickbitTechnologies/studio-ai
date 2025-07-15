@@ -303,12 +303,13 @@ export const WordEditor = forwardRef<HTMLDivElement, WordEditorProps>(
               </PopoverContent>
             </Popover>
           </div>
-          <div ref={ref} className="flex-1 p-4 bg-background/50 rounded-b-lg relative overflow-y-auto">
+          <div className="flex-1 p-4 bg-background/50 rounded-b-lg overflow-y-auto focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2">
             <div
+              ref={ref}
               contentEditable
               onInput={handleInput}
               dangerouslySetInnerHTML={{ __html: editorContent }}
-              className="w-full h-full resize-none border-0 focus-visible:ring-0 focus-visible:ring-offset-0 p-8 shadow-inner bg-card prose dark:prose-invert max-w-none"
+              className="w-full h-full resize-none border-0 outline-none p-8 shadow-inner bg-card prose dark:prose-invert max-w-none"
               style={{ lineHeight: '1.75' }}
             />
           </div>
@@ -319,5 +320,3 @@ export const WordEditor = forwardRef<HTMLDivElement, WordEditorProps>(
 );
 
 WordEditor.displayName = "WordEditor";
-
-    
