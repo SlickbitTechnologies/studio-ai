@@ -16,7 +16,7 @@ import { ichE3Sections } from "@/data/ich-e3-sections";
 import { IchE3Navigator } from "@/components/ich-e3-navigator";
 import { WordEditor } from "@/components/word-editor";
 
-import { generateCsrDraft } from "@/ai/flows/generate-csr-draft";
+import { generateFullCsr } from "@/ai/flows/generate-full-csr";
 
 import * as pdfjs from "pdfjs-dist";
 import mammoth from "mammoth";
@@ -31,61 +31,12 @@ interface UploadedFile {
   content: string;
 }
 
-function getInitialEditorContent(): string {
-  let content = `<h1>Clinical Study Report</h1><p>Welcome to CSR DraftWise! This document is structured according to the ICH E3 guidelines.</p><p>To get started, upload your source documents and click "Generate Full Draft".</p>`;
-
-  const generateSections = (sections: Section[], level: number): string => {
-    return sections
-      .map((section) => {
-        const headingTag = `h${level > 6 ? 6 : level}`;
-        const childrenContent = section.children
-          ? generateSections(section.children, level + 1)
-          : "";
-        const placeholder = `<p data-placeholder-for="section-${section.id}">[Content for this section will be generated here.]</p>`;
-        return `<${headingTag} id="section-${section.id}">${section.id} ${section.title}</${headingTag}>${placeholder}${childrenContent}`;
-      })
-      .join("");
-  };
-
-  content += generateSections(ichE3Sections, 2); // Start with <h2> for top-level sections
-  return content;
-}
-
 // Helper function to introduce a delay
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// Retry logic with exponential backoff for handling API errors
-async function retryWithBackoff<T>(
-  fn: () => Promise<T>,
-  retries = 3,
-  initialDelay = 10000 // 10 seconds
-): Promise<T> {
-  let lastError: any;
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await fn();
-    } catch (err: any) {
-      lastError = err;
-      if ((err.message.includes('429') || err.message.includes('503')) && i < retries - 1) {
-        const delay = initialDelay * (i + 1); // 10s, 20s, 30s
-        console.warn(`Attempt ${i + 1} failed for a recoverable error. Retrying in ${delay / 1000}s...`);
-        await sleep(delay);
-      } else {
-        // Non-recoverable error or final retry failed
-        throw err;
-      }
-    }
-  }
-  throw lastError; // This line should not be reachable, but is here for safety
-}
-
-
 export default function CsrDraftingPage() {
   const [activeSection, setActiveSection] = useState<Section | null>(null);
-  const [editorContent, setEditorContent] = useState<string>(
-    getInitialEditorContent()
-  );
-
+  const [editorContent, setEditorContent] = useState<string>("");
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
@@ -97,19 +48,14 @@ export default function CsrDraftingPage() {
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const allSections: Section[] = useMemo(() => {
-    const sections: Section[] = [];
-    const collectSections = (s: Section[]) => {
-      s.forEach(section => {
-        sections.push(section);
-        if (section.children) {
-          collectSections(section.children);
-        }
-      });
-    };
-    collectSections(ichE3Sections);
-    return sections;
-  }, []);
+  const getInitialEditorContent = (): string => {
+    let content = `<h1>Clinical Study Report</h1><p>Welcome to CSR DraftWise! This document is structured according to the ICH E3 guidelines.</p><p>To get started, upload your source documents and click "Generate Full Draft".</p>`;
+    return content;
+  };
+
+  useState(() => {
+    setEditorContent(getInitialEditorContent());
+  });
 
   const handleSectionSelectInNav = (
     section: Section,
@@ -173,79 +119,48 @@ export default function CsrDraftingPage() {
   const canGenerate = useMemo(() => {
     return uploadedFiles.length > 0;
   }, [uploadedFiles]);
-
+  
   const handleGenerateFullDraft = async () => {
     if (!canGenerate) return;
-  
+
     setIsGenerating(true);
-    let currentEditorContent = getInitialEditorContent();
-    setEditorContent(currentEditorContent);
-    const failedSections: string[] = [];
-  
-    setCurrentSectionTitle("Starting draft generation...");
-    setGenerationProgress(0);
-    
-    const combinedSourceText = uploadedFiles.map((f) => f.content).join("\n\n---\n\n");
-    
-    for (let i = 0; i < allSections.length; i++) {
-      const section = allSections[i];
-      let finalDraft = `<p><span style="color: red;">[Failed to generate content for section ${section.id}.]</span></p>`;
+    setCurrentSectionTitle("Analyzing source documents and generating full draft...");
+    setGenerationProgress(25); // Initial progress
 
-      try {
-        setCurrentSectionTitle(`Drafting section ${section.id}: ${section.title}`);
+    try {
+        const combinedSourceText = uploadedFiles.map((f) => f.content).join("\n\n---\n\n");
+
+        setGenerationProgress(50);
+        setCurrentSectionTitle("Generating full report. This may take a moment...");
         
-        const draftResponse = await retryWithBackoff(() => 
-          generateCsrDraft({
-            sectionId: section.id,
-            sectionTitle: section.title,
+        const fullDraftResponse = await generateFullCsr({
             sourceText: combinedSourceText,
-          })
-        );
-        finalDraft = draftResponse.draft;
+        });
+
+        setGenerationProgress(90);
+        setCurrentSectionTitle("Finalizing document...");
         
-        // Proactively pause to stay within rate limits
-        await sleep(5000); 
+        setEditorContent(fullDraftResponse.fullDraft);
 
-      } catch (error) {
-        console.error(`Error processing section ${section.id}:`, error);
-        failedSections.push(section.id);
-      }
+        toast({
+            title: "Full Draft Generation Complete",
+            description: "The full CSR draft has been generated successfully.",
+        });
 
-      // Update the editor content with the generated draft
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = currentEditorContent;
-      const placeholder = tempDiv.querySelector(`[data-placeholder-for="section-${section.id}"]`);
-      
-      if (placeholder) {
-        const draftElement = document.createElement('div');
-        draftElement.innerHTML = finalDraft;
-        placeholder.replaceWith(...Array.from(draftElement.childNodes));
-        currentEditorContent = tempDiv.innerHTML;
-      }
-  
-      // Update progress and editor content after each section
-      const progress = Math.round(((i + 1) / allSections.length) * 100);
-      setGenerationProgress(progress);
-      setEditorContent(currentEditorContent);
+    } catch (error: any) {
+        console.error("Error generating full CSR draft:", error);
+        toast({
+            variant: "destructive",
+            title: "Draft Generation Failed",
+            description: `An unexpected error occurred. Please check the console. Error: ${error.message}`,
+            duration: 9000,
+        });
+    } finally {
+        setGenerationProgress(100);
+        setIsGenerating(false);
+        setCurrentSectionTitle("");
     }
-  
-    if (failedSections.length > 0) {
-      toast({
-        variant: "destructive",
-        title: "Draft Generation Partially Complete",
-        description: `Failed to generate ${failedSections.length} section(s): ${failedSections.join(', ')}. Please review the document.`,
-        duration: 9000,
-      });
-    } else {
-      toast({
-        title: "Full Draft Generation Complete",
-        description: "All sections have been processed successfully.",
-      });
-    }
-  
-    setIsGenerating(false);
-    setCurrentSectionTitle("");
-  };
+};
 
   return (
     <div className="h-screen w-screen bg-background text-foreground flex flex-col font-body">
@@ -375,7 +290,7 @@ export default function CsrDraftingPage() {
                     2. Generate Full Draft
                   </Label>
                   <p className="text-sm text-muted-foreground">
-                      Click the button below to generate a draft for the entire report. The AI will draft each section sequentially.
+                      Click the button below to generate a draft for the entire report. This will make a single request to the AI.
                   </p>
                 </div>
 
@@ -383,9 +298,7 @@ export default function CsrDraftingPage() {
                   <div className="space-y-2">
                     <Progress value={generationProgress} className="w-full" />
                     <p className="text-sm text-center text-muted-foreground animate-pulse">
-                      {generationProgress < 100
-                        ? `${currentSectionTitle}`
-                        : "Finalizing document..."}
+                      {currentSectionTitle}
                     </p>
                   </div>
                 )}
@@ -418,3 +331,5 @@ export default function CsrDraftingPage() {
     </div>
   );
 }
+
+    

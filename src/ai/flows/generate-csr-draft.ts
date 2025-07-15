@@ -2,6 +2,7 @@
 'use server';
 /**
  * @fileOverview A flow for generating a single section of a Clinical Study Report.
+ * @deprecated This flow is deprecated in favor of generate-full-csr.ts.
  *
  * - generateCsrDraft - A function that handles the CSR section draft generation.
  * - CsrDraftInput - The input type for the generateCsrDraft function.
@@ -67,3 +68,5 @@ const generateCsrDraftFlow = ai.defineFlow(
     return output!;
   }
 );
+
+    
