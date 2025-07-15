@@ -2,13 +2,14 @@
 "use client";
 
 import { useState, useRef, useMemo } from "react";
-import { BrainCircuit, Upload, Trash2, Wand2, Loader2, FileText } from "lucide-react";
+import { BrainCircuit, Upload, Trash2, Wand2, Loader2, FileText, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
 
 import type { Section } from "@/data/ich-e3-sections";
 import { ichE3Sections } from "@/data/ich-e3-sections";
@@ -61,6 +62,8 @@ export default function CsrDraftingPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [currentSectionTitle, setCurrentSectionTitle] = useState("");
+  const [isLeftPanelCollapsed, setIsLeftPanelCollapsed] = useState(false);
+  const [isRightPanelCollapsed, setIsRightPanelCollapsed] = useState(false);
 
   const { toast } = useToast();
   const editorRef = useRef<HTMLDivElement>(null);
@@ -157,8 +160,7 @@ export default function CsrDraftingPage() {
       setCurrentSectionTitle(`${section.id} ${section.title}`);
       
       try {
-        // Add a delay to avoid hitting rate limits or overloading the service
-        if (i > 0) await sleep(5000); // 5-second delay between requests
+        if (i > 0) await sleep(5000); 
 
         const response = await generateCsrDraft({
           sectionId: section.id,
@@ -168,7 +170,6 @@ export default function CsrDraftingPage() {
 
         const { draft } = response;
         
-        // Use a temporary DOM element to safely manipulate HTML
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = currentEditorContent;
         
@@ -177,7 +178,7 @@ export default function CsrDraftingPage() {
         if (placeholder) {
            placeholder.outerHTML = draft;
            currentEditorContent = tempDiv.innerHTML;
-           setEditorContent(currentEditorContent); // Update state to re-render editor
+           setEditorContent(currentEditorContent);
         }
 
       } catch (error: any) {
@@ -212,13 +213,29 @@ export default function CsrDraftingPage() {
           </h1>
         </div>
       </header>
-      <div className="flex flex-1 min-h-0">
-        <aside className="w-[380px] shrink-0 border-r bg-card/50">
-          <IchE3Navigator
-            activeSection={activeSection}
-            setActiveSection={handleSectionSelectInNav}
-          />
+      <div className="flex flex-1 min-h-0 relative">
+        <aside className={cn(
+          "bg-card/50 border-r transition-all duration-300 ease-in-out",
+          isLeftPanelCollapsed ? "w-0" : "w-[380px]"
+        )}>
+          <div className="h-full w-[380px]">
+            <IchE3Navigator
+              activeSection={activeSection}
+              setActiveSection={handleSectionSelectInNav}
+            />
+          </div>
         </aside>
+        
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => setIsLeftPanelCollapsed(!isLeftPanelCollapsed)}
+          className="absolute top-1/2 -translate-y-1/2 bg-card z-10 h-24 w-6 rounded-l-none"
+          style={{ left: isLeftPanelCollapsed ? '0px' : '380px', transition: 'left 300ms ease-in-out' }}
+        >
+          {isLeftPanelCollapsed ? <ChevronsRight className="h-5 w-5"/> : <ChevronsLeft className="h-5 w-5"/>}
+        </Button>
+
 
         <main className="flex-1 flex p-4 gap-4 overflow-hidden">
           <WordEditor
@@ -228,117 +245,133 @@ export default function CsrDraftingPage() {
           />
         </main>
 
-        <aside className="w-[420px] shrink-0 border-l bg-card/50 p-4">
-          <Card className="h-full flex flex-col">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Wand2 className="h-6 w-6 text-primary" />
-                AI Draft Assistant
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col gap-6 overflow-y-auto">
-              <div className="space-y-4">
-                <Label className="font-semibold text-lg">
-                  1. Upload Source Documents
-                </Label>
-                <div className="p-4 border-2 border-dashed rounded-lg text-center">
-                  <Button
-                    variant="outline"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isGenerating}
-                  >
-                    <Upload className="mr-2 h-4 w-4" />
-                    Upload Files
-                  </Button>
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileChange}
-                    className="hidden"
-                    multiple
-                    accept=".pdf,.docx"
-                  />
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Upload PDF or DOCX files.
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => setIsRightPanelCollapsed(!isRightPanelCollapsed)}
+          className="absolute top-1/2 -translate-y-1/2 bg-card z-10 h-24 w-6 rounded-r-none"
+          style={{ right: isRightPanelCollapsed ? '0px' : '420px', transition: 'right 300ms ease-in-out' }}
+        >
+          {isRightPanelCollapsed ? <ChevronsLeft className="h-5 w-5"/> : <ChevronsRight className="h-5 w-5"/>}
+        </Button>
+
+        <aside className={cn(
+          "bg-card/50 border-l transition-all duration-300 ease-in-out p-4",
+          isRightPanelCollapsed ? "w-0 p-0" : "w-[420px]"
+        )}>
+          <div className={cn("h-full w-[388px] transition-opacity", isRightPanelCollapsed && 'opacity-0')}>
+            <Card className="h-full flex flex-col">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wand2 className="h-6 w-6 text-primary" />
+                  AI Draft Assistant
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex-1 flex flex-col gap-6 overflow-y-auto">
+                <div className="space-y-4">
+                  <Label className="font-semibold text-lg">
+                    1. Upload Source Documents
+                  </Label>
+                  <div className="p-4 border-2 border-dashed rounded-lg text-center">
+                    <Button
+                      variant="outline"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isGenerating}
+                    >
+                      <Upload className="mr-2 h-4 w-4" />
+                      Upload Files
+                    </Button>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      className="hidden"
+                      multiple
+                      accept=".pdf,.docx"
+                    />
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Upload PDF or DOCX files.
+                    </p>
+                  </div>
+                  {uploadedFiles.length > 0 && (
+                    <div>
+                      <Label className="font-medium">
+                        Uploaded files:
+                      </Label>
+                      <ScrollArea className="h-40 mt-2">
+                        <div className="space-y-1 pr-4">
+                            {uploadedFiles.map((file) => (
+                              <div
+                                key={file.name}
+                                className="flex items-center justify-between p-2 bg-muted/50 rounded-md text-sm"
+                              >
+                                <div className="flex items-center gap-2 truncate flex-1">
+                                  <FileText className="h-4 w-4 text-muted-foreground"/>
+                                  <span className="font-normal truncate">{file.name}</span>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 shrink-0"
+                                  onClick={() => removeFile(file.name)}
+                                  disabled={isGenerating}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                      </ScrollArea>
+                    </div>
+                  )}
+                </div>
+
+                 <div className="space-y-4">
+                  <Label className="font-semibold text-lg">
+                    2. Generate Full Draft
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                      Click the button below to generate a draft for the entire report. The AI will process each section sequentially.
                   </p>
                 </div>
-                {uploadedFiles.length > 0 && (
-                  <div>
-                    <Label className="font-medium">
-                      Uploaded files:
-                    </Label>
-                    <ScrollArea className="h-40 mt-2">
-                      <div className="space-y-1 pr-4">
-                          {uploadedFiles.map((file) => (
-                            <div
-                              key={file.name}
-                              className="flex items-center justify-between p-2 bg-muted/50 rounded-md text-sm"
-                            >
-                              <div className="flex items-center gap-2 truncate flex-1">
-                                <FileText className="h-4 w-4 text-muted-foreground"/>
-                                <span className="font-normal truncate">{file.name}</span>
-                              </div>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 shrink-0"
-                                onClick={() => removeFile(file.name)}
-                                disabled={isGenerating}
-                              >
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                    </ScrollArea>
+
+                {isGenerating && (
+                  <div className="space-y-2">
+                    <Progress value={generationProgress} className="w-full" />
+                    <p className="text-sm text-center text-muted-foreground animate-pulse">
+                      {generationProgress < 100
+                        ? `Drafting: ${currentSectionTitle}`
+                        : "Finalizing document..."}
+                    </p>
                   </div>
                 )}
-              </div>
 
-               <div className="space-y-4">
-                <Label className="font-semibold text-lg">
-                  2. Generate Full Draft
-                </Label>
-                <p className="text-sm text-muted-foreground">
-                    Click the button below to generate a draft for the entire report. The AI will process each section sequentially.
-                </p>
-              </div>
-
-              {isGenerating && (
-                <div className="space-y-2">
-                  <Progress value={generationProgress} className="w-full" />
-                  <p className="text-sm text-center text-muted-foreground animate-pulse">
-                    {generationProgress < 100
-                      ? `Drafting: ${currentSectionTitle}`
-                      : "Finalizing document..."}
-                  </p>
+                <div className="mt-auto pt-4 border-t">
+                  <Button
+                    className="w-full"
+                    size="lg"
+                    onClick={handleGenerateFullDraft}
+                    disabled={!canGenerate || isGenerating}
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Generating Report...
+                      </>
+                    ) : (
+                      <>
+                        <Wand2 className="mr-2 h-4 w-4" />
+                        Generate Full Draft
+                      </>
+                    )}
+                  </Button>
                 </div>
-              )}
-
-              <div className="mt-auto pt-4 border-t">
-                <Button
-                  className="w-full"
-                  size="lg"
-                  onClick={handleGenerateFullDraft}
-                  disabled={!canGenerate || isGenerating}
-                >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Generating Report...
-                    </>
-                  ) : (
-                    <>
-                      <Wand2 className="mr-2 h-4 w-4" />
-                      Generate Full Draft
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </aside>
       </div>
     </div>
   );
-}
+
+    
