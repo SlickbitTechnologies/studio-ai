@@ -151,90 +151,72 @@ export default function CsrDraftingPage() {
   
     setIsGenerating(true);
     setGenerationProgress(0);
+    setCurrentSectionTitle("Preparing to generate...");
   
     const combinedSourceText = uploadedFiles.map((f) => f.content).join("\n\n---\n\n");
-    let currentEditorContent = getInitialEditorContent(); // Start with fresh content
+    let currentEditorContent = getInitialEditorContent();
     setEditorContent(currentEditorContent);
+    
+    const BATCH_SIZE = 5;
+    const failedSections: string[] = [];
+    let processedCount = 0;
   
-    for (let i = 0; i < allSections.length; i++) {
-      const section = allSections[i];
-      setCurrentSectionTitle(`${section.id} ${section.title}`);
+    for (let i = 0; i < allSections.length; i += BATCH_SIZE) {
+      const batch = allSections.slice(i, i + BATCH_SIZE);
+      setCurrentSectionTitle(`Processing batch ${i / BATCH_SIZE + 1}...`);
+  
+      const batchPromises = batch.map(section => 
+        generateCsrDraft({
+          sectionId: section.id,
+          sectionTitle: section.title,
+          sourceText: combinedSourceText,
+        }).then(response => ({ id: section.id, draft: response.draft, status: 'fulfilled' }))
+          .catch(error => {
+            console.error(`Error generating draft for section ${section.id}:`, error);
+            failedSections.push(section.id);
+            return { id: section.id, draft: null, status: 'rejected' };
+          })
+      );
+  
+      const results = await Promise.all(batchPromises);
       
-      let success = false;
-      let retries = 0;
-      const maxRetries = 3;
-      
-      while (!success && retries < maxRetries) {
-        try {
-          // Add delay before the first attempt (except for the very first section) and all retries
-          if (i > 0 || retries > 0) {
-            const delay = 5000 * (retries + 1); // 5s, 10s, 15s
-            await sleep(delay);
-          }
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = currentEditorContent;
   
-          const response = await generateCsrDraft({
-            sectionId: section.id,
-            sectionTitle: section.title,
-            sourceText: combinedSourceText,
-          });
-  
-          const { draft } = response;
-          
-          const tempDiv = document.createElement('div');
-          tempDiv.innerHTML = currentEditorContent;
-          const placeholder = tempDiv.querySelector(`[data-placeholder-for="section-${section.id}"]`);
-  
+      results.forEach(result => {
+        if (result.status === 'fulfilled' && result.draft) {
+          const placeholder = tempDiv.querySelector(`[data-placeholder-for="section-${result.id}"]`);
           if (placeholder) {
-             placeholder.outerHTML = draft;
-             currentEditorContent = tempDiv.innerHTML;
-             setEditorContent(currentEditorContent);
-          }
-          success = true;
-  
-        } catch (error: any) {
-          const errorMessage = error.message || "An unexpected error occurred.";
-          console.error(`Error generating draft for section ${section.id}:`, errorMessage);
-  
-          // Check for specific rate limit or overload errors
-          if (errorMessage.includes('429') || errorMessage.includes('503')) {
-            retries++;
-            if (retries < maxRetries) {
-              toast({
-                variant: "destructive",
-                title: `AI Generation Paused for ${section.id}`,
-                description: `Model is busy. Retrying in ${5 * retries} seconds... (Attempt ${retries}/${maxRetries})`,
-              });
-            } else {
-              toast({
-                variant: "destructive",
-                title: `AI Generation Failed for ${section.id}`,
-                description: `The model is currently unavailable after multiple retries. Skipping section.`,
-              });
-            }
-          } else {
-            // For other errors, fail immediately
-            toast({
-              variant: "destructive",
-              title: `AI Generation Failed for ${section.id}`,
-              description: "An unexpected error occurred. Continuing to next section.",
-            });
-            retries = maxRetries; // exit loop
+            placeholder.outerHTML = result.draft;
           }
         }
-      }
+      });
   
-      const progress = Math.round(((i + 1) / allSections.length) * 100);
+      currentEditorContent = tempDiv.innerHTML;
+      setEditorContent(currentEditorContent);
+  
+      processedCount += batch.length;
+      const progress = Math.round((processedCount / allSections.length) * 100);
       setGenerationProgress(progress);
     }
   
-    toast({
-      title: "Full Draft Generation Complete",
-      description: "All sections have been processed.",
-    });
+    if (failedSections.length > 0) {
+      toast({
+        variant: "destructive",
+        title: "Draft Generation Partially Complete",
+        description: `Failed to generate ${failedSections.length} section(s). Please review the document.`,
+      });
+    } else {
+      toast({
+        title: "Full Draft Generation Complete",
+        description: "All sections have been processed successfully.",
+      });
+    }
   
     setIsGenerating(false);
     setCurrentSectionTitle("");
   };
+  
 
   return (
     <div className="h-screen w-screen bg-background text-foreground flex flex-col font-body">
@@ -407,3 +389,5 @@ export default function CsrDraftingPage() {
     </div>
   );
 }
+
+    
