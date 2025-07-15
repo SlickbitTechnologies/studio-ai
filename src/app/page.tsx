@@ -60,15 +60,16 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   retries = 3,
-  initialDelay = 5000
+  initialDelay = 15000 // Increased initial delay to 15 seconds
 ): Promise<T> {
   for (let i = 0; i < retries; i++) {
     try {
       return await fn();
     } catch (err: any) {
       if ((err.message.includes('429') || err.message.includes('503')) && i < retries - 1) {
-        const delay = initialDelay * Math.pow(2, i);
-        console.warn(`Attempt ${i + 1} failed due to rate limit. Retrying in ${delay}ms...`);
+        // Use a more aggressive backoff factor
+        const delay = initialDelay * (i + 1);
+        console.warn(`Attempt ${i + 1} failed due to rate limit/service availability. Retrying in ${delay / 1000}s...`);
         await sleep(delay);
       } else {
         throw err;
@@ -201,7 +202,7 @@ export default function CsrDraftingPage() {
       toast({
         variant: "destructive",
         title: "Analysis Failed",
-        description: "Could not analyze source documents even after multiple retries. Please try again later.",
+        description: "Could not analyze source documents even after multiple retries. Please check your API quota or try again later.",
         duration: 9000,
       });
       setIsGenerating(false);
@@ -218,7 +219,7 @@ export default function CsrDraftingPage() {
       setCurrentSectionTitle(`Drafting section ${mapping.sectionId}: ${mapping.sectionTitle}`);
   
       // Skip drafting if no relevant text was found
-      if (!mapping.relevantText) {
+      if (!mapping.relevantText || mapping.relevantText.trim() === "") {
           const progress = 30 + Math.round(((i + 1) / sectionMappings.length) * 70);
           setGenerationProgress(progress);
           continue;
@@ -444,3 +445,4 @@ export default function CsrDraftingPage() {
     
 
     
+
