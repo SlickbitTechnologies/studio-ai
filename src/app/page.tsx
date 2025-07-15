@@ -15,7 +15,11 @@ import type { Section } from "@/data/ich-e3-sections";
 import { ichE3Sections } from "@/data/ich-e3-sections";
 import { IchE3Navigator } from "@/components/ich-e3-navigator";
 import { WordEditor } from "@/components/word-editor";
+
 import { generateCsrDraft } from "@/ai/flows/generate-csr-draft";
+import { mapContentToSections } from "@/ai/flows/map-content-to-sections";
+import type { ContentMappingOutput } from "@/ai/flows/map-content-to-sections";
+
 import * as pdfjs from "pdfjs-dist";
 import mammoth from "mammoth";
 
@@ -173,31 +177,63 @@ export default function CsrDraftingPage() {
     if (!canGenerate) return;
   
     setIsGenerating(true);
-    setGenerationProgress(0);
-    setCurrentSectionTitle("Preparing to generate...");
-  
-    const combinedSourceText = uploadedFiles.map((f) => f.content).join("\n\n---\n\n");
     let currentEditorContent = getInitialEditorContent();
     setEditorContent(currentEditorContent);
-    
     const failedSections: string[] = [];
   
-    for (let i = 0; i < allSections.length; i++) {
-      const section = allSections[i];
-      setCurrentSectionTitle(`Generating section ${section.id}: ${section.title}`);
+    // Step 1: Map Content to Sections
+    setCurrentSectionTitle("Step 1 of 2: Analyzing source documents...");
+    setGenerationProgress(10); // Initial progress for analysis step
+    
+    const combinedSourceText = uploadedFiles.map((f) => f.content).join("\n\n---\n\n");
+    let contentMap: ContentMappingOutput;
+    
+    try {
+      contentMap = await mapContentToSections({
+        sourceText: combinedSourceText,
+        sections: allSections.map(s => ({ id: s.id, title: s.title })),
+      });
+      setGenerationProgress(30); // Progress after successful analysis
+    } catch (error) {
+      console.error("Error during content mapping:", error);
+      toast({
+        variant: "destructive",
+        title: "Analysis Failed",
+        description: "Could not analyze source documents. Please try again.",
+        duration: 9000,
+      });
+      setIsGenerating(false);
+      return;
+    }
+    
+    // Step 2: Generate Draft for Each Section
+    setCurrentSectionTitle("Step 2 of 2: Drafting sections...");
+    
+    const sectionMappings = contentMap.sectionMappings;
+    
+    for (let i = 0; i < sectionMappings.length; i++) {
+      const mapping = sectionMappings[i];
+      setCurrentSectionTitle(`Drafting section ${mapping.sectionId}: ${mapping.sectionTitle}`);
   
+      // Skip drafting if no relevant text was found
+      if (!mapping.relevantText) {
+          const progress = 30 + Math.round(((i + 1) / sectionMappings.length) * 70);
+          setGenerationProgress(progress);
+          continue;
+      }
+
       try {
         const response = await retryWithBackoff(() => 
           generateCsrDraft({
-            sectionId: section.id,
-            sectionTitle: section.title,
-            sourceText: combinedSourceText,
+            sectionId: mapping.sectionId,
+            sectionTitle: mapping.sectionTitle,
+            sourceText: mapping.relevantText, // Use mapped text
           })
         );
         
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = currentEditorContent;
-        const placeholder = tempDiv.querySelector(`[data-placeholder-for="section-${section.id}"]`);
+        const placeholder = tempDiv.querySelector(`[data-placeholder-for="section-${mapping.sectionId}"]`);
         if (placeholder) {
           placeholder.outerHTML = response.draft;
         }
@@ -205,11 +241,11 @@ export default function CsrDraftingPage() {
         setEditorContent(currentEditorContent);
   
       } catch (error) {
-        console.error(`Error generating draft for section ${section.id} after retries:`, error);
-        failedSections.push(section.id);
+        console.error(`Error generating draft for section ${mapping.sectionId} after retries:`, error);
+        failedSections.push(mapping.sectionId);
       }
   
-      const progress = Math.round(((i + 1) / allSections.length) * 100);
+      const progress = 30 + Math.round(((i + 1) / sectionMappings.length) * 70);
       setGenerationProgress(progress);
     }
   
@@ -359,7 +395,7 @@ export default function CsrDraftingPage() {
                     2. Generate Full Draft
                   </Label>
                   <p className="text-sm text-muted-foreground">
-                      Click the button below to generate a draft for the entire report. The AI will process each section sequentially.
+                      Click the button below to generate a draft for the entire report. The AI will first analyze all documents, then draft each section.
                   </p>
                 </div>
 
@@ -401,5 +437,6 @@ export default function CsrDraftingPage() {
       </div>
     </div>
   );
+}
 
     
