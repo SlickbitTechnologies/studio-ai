@@ -228,8 +228,8 @@ export default function CsrDraftingPage() {
       
       if (placeholder) {
         placeholder.outerHTML = finalDraft;
+        currentEditorContent = tempDiv.innerHTML;
       }
-      currentEditorContent = tempDiv.innerHTML;
   
       // Update progress and editor content after each section
       const progress = Math.round(((i + 1) / allSections.length) * 100);
@@ -426,5 +426,7 @@ export default function CsrDraftingPage() {
     </div>
   );
 }
+
+    
 
     
