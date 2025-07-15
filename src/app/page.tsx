@@ -158,12 +158,15 @@ export default function CsrDraftingPage() {
     setEditorContent(currentEditorContent);
     
     const BATCH_SIZE = 5;
+    const DELAY_BETWEEN_BATCHES = 5000; // 5 seconds
     const failedSections: string[] = [];
     let processedCount = 0;
+    const totalBatches = Math.ceil(allSections.length / BATCH_SIZE);
   
     for (let i = 0; i < allSections.length; i += BATCH_SIZE) {
       const batch = allSections.slice(i, i + BATCH_SIZE);
-      setCurrentSectionTitle(`Processing batch ${i / BATCH_SIZE + 1}...`);
+      const batchNumber = (i / BATCH_SIZE) + 1;
+      setCurrentSectionTitle(`Processing batch ${batchNumber} of ${totalBatches}...`);
   
       const batchPromises = batch.map(section => 
         generateCsrDraft({
@@ -180,6 +183,7 @@ export default function CsrDraftingPage() {
   
       const results = await Promise.all(batchPromises);
       
+      // Use a temporary DOM element to safely update content
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = currentEditorContent;
   
@@ -198,13 +202,18 @@ export default function CsrDraftingPage() {
       processedCount += batch.length;
       const progress = Math.round((processedCount / allSections.length) * 100);
       setGenerationProgress(progress);
+
+      // Add delay between batches, but not after the last one
+      if (batchNumber < totalBatches) {
+        await sleep(DELAY_BETWEEN_BATCHES);
+      }
     }
   
     if (failedSections.length > 0) {
       toast({
         variant: "destructive",
         title: "Draft Generation Partially Complete",
-        description: `Failed to generate ${failedSections.length} section(s). Please review the document.`,
+        description: `Failed to generate ${failedSections.length} section(s): ${failedSections.join(', ')}.`,
       });
     } else {
       toast({
@@ -355,7 +364,7 @@ export default function CsrDraftingPage() {
                     <Progress value={generationProgress} className="w-full" />
                     <p className="text-sm text-center text-muted-foreground animate-pulse">
                       {generationProgress < 100
-                        ? `Drafting: ${currentSectionTitle}`
+                        ? `${currentSectionTitle}`
                         : "Finalizing document..."}
                     </p>
                   </div>
@@ -389,5 +398,3 @@ export default function CsrDraftingPage() {
     </div>
   );
 }
-
-    
