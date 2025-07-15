@@ -68,7 +68,7 @@ async function retryWithBackoff<T>(
     } catch (err: any) {
       if ((err.message.includes('429') || err.message.includes('503')) && i < retries - 1) {
         const delay = initialDelay * Math.pow(2, i);
-        console.warn(`Attempt ${i + 1} failed. Retrying in ${delay}ms...`);
+        console.warn(`Attempt ${i + 1} failed due to rate limit. Retrying in ${delay}ms...`);
         await sleep(delay);
       } else {
         throw err;
@@ -181,7 +181,7 @@ export default function CsrDraftingPage() {
     setEditorContent(currentEditorContent);
     const failedSections: string[] = [];
   
-    // Step 1: Map Content to Sections
+    // Step 1: Map Content to Sections with retry logic
     setCurrentSectionTitle("Step 1 of 2: Analyzing source documents...");
     setGenerationProgress(10); // Initial progress for analysis step
     
@@ -189,17 +189,19 @@ export default function CsrDraftingPage() {
     let contentMap: ContentMappingOutput;
     
     try {
-      contentMap = await mapContentToSections({
-        sourceText: combinedSourceText,
-        sections: allSections.map(s => ({ id: s.id, title: s.title })),
-      });
+      contentMap = await retryWithBackoff(() => 
+        mapContentToSections({
+          sourceText: combinedSourceText,
+          sections: allSections.map(s => ({ id: s.id, title: s.title })),
+        })
+      );
       setGenerationProgress(30); // Progress after successful analysis
     } catch (error) {
-      console.error("Error during content mapping:", error);
+      console.error("Error during content mapping after retries:", error);
       toast({
         variant: "destructive",
         title: "Analysis Failed",
-        description: "Could not analyze source documents. Please try again.",
+        description: "Could not analyze source documents even after multiple retries. Please try again later.",
         duration: 9000,
       });
       setIsGenerating(false);
@@ -438,5 +440,7 @@ export default function CsrDraftingPage() {
     </div>
   );
 }
+
+    
 
     
