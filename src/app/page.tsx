@@ -203,6 +203,9 @@ export default function CsrDraftingPage() {
         );
         finalDraft = draftResponse.draft;
         
+        // Proactively pause to stay within rate limits
+        await sleep(5000); 
+
       } catch (error) {
         console.error(`Error processing section ${section.id}:`, error);
         failedSections.push(section.id);
@@ -214,7 +217,9 @@ export default function CsrDraftingPage() {
       const placeholder = tempDiv.querySelector(`[data-placeholder-for="section-${section.id}"]`);
       
       if (placeholder) {
-        placeholder.outerHTML = finalDraft;
+        const draftElement = document.createElement('div');
+        draftElement.innerHTML = finalDraft;
+        placeholder.replaceWith(...Array.from(draftElement.childNodes));
         currentEditorContent = tempDiv.innerHTML;
       }
   
