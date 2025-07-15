@@ -115,7 +115,9 @@ export default function CsrDraftingPage() {
           const result = await mammoth.extractRawText({ arrayBuffer });
           content = result.value;
         } else {
-          content = await file.text();
+           // This case should ideally not be hit with the updated accept attribute
+          toast({ variant: "destructive", title: "Unsupported File", description: `Could not process ${file.name}. Only PDF and DOCX are supported.` });
+          continue;
         }
         
         const newFile = { name: file.name, content };
@@ -247,10 +249,10 @@ export default function CsrDraftingPage() {
                     onChange={handleFileChange}
                     className="hidden"
                     multiple
-                    accept=".txt,.md,.html,.pdf,.docx"
+                    accept=".pdf,.docx"
                   />
                   <p className="text-xs text-muted-foreground mt-2">
-                    Upload PDF, DOCX, TXT, MD, or HTML files.
+                    Upload PDF or DOCX files.
                   </p>
                 </div>
                 {uploadedFiles.length > 0 && (
