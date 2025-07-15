@@ -17,6 +17,8 @@ import { IchE3Navigator } from "@/components/ich-e3-navigator";
 import { WordEditor } from "@/components/word-editor";
 
 import { generateCsrDraft } from "@/ai/flows/generate-csr-draft";
+import { findRelevantTextForSection } from "@/ai/flows/find-relevant-text";
+
 
 import * as pdfjs from "pdfjs-dist";
 import mammoth from "mammoth";
@@ -65,8 +67,8 @@ async function retryWithBackoff<T>(
       return await fn();
     } catch (err: any) {
       if ((err.message.includes('429') || err.message.includes('503')) && i < retries - 1) {
-        const delay = initialDelay * (i + 1);
-        console.warn(`Attempt ${i + 1} failed due to rate limit/service availability. Retrying in ${delay / 1000}s...`);
+        const delay = initialDelay * (i + 1); // 15s, 30s, 45s
+        console.warn(`Attempt ${i + 1} failed. Retrying in ${delay / 1000}s...`);
         await sleep(delay);
       } else {
         throw err;
@@ -179,53 +181,60 @@ export default function CsrDraftingPage() {
     setEditorContent(currentEditorContent);
     const failedSections: string[] = [];
   
-    setCurrentSectionTitle("Drafting sections...");
+    setCurrentSectionTitle("Analyzing documents...");
     setGenerationProgress(0);
     
     const combinedSourceText = uploadedFiles.map((f) => f.content).join("\n\n---\n\n");
     
     for (let i = 0; i < allSections.length; i++) {
       const section = allSections[i];
-      setCurrentSectionTitle(`Drafting section ${section.id}: ${section.title}`);
-  
+      let finalDraft = `<p><span style="color: red;">[Failed to generate content for section ${section.id}.]</span></p>`;
+
       try {
-        const response = await retryWithBackoff(() => 
-          generateCsrDraft({
+        // Step 1: Find relevant text for the current section
+        setCurrentSectionTitle(`Finding text for ${section.id}: ${section.title}`);
+        const analysisResponse = await retryWithBackoff(() => 
+          findRelevantTextForSection({
             sectionId: section.id,
             sectionTitle: section.title,
             sourceText: combinedSourceText,
           })
         );
-        
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = currentEditorContent;
-        const placeholder = tempDiv.querySelector(`[data-placeholder-for="section-${section.id}"]`);
-        
-        if (placeholder) {
-          // Replace placeholder with the generated draft
-          const draftContainer = document.createElement('div');
-          draftContainer.innerHTML = response.draft;
-          // Ensure we don't insert an empty container if the draft is just the insufficient info message
-          if (draftContainer.textContent?.trim() !== '[Insufficient information in source documents to generate this section.]') {
-             placeholder.outerHTML = response.draft;
-          } else {
-             // If info is insufficient, we can leave the placeholder or remove it.
-             // Here, we'll leave the original placeholder text but remove the data attribute.
-             const p = document.createElement('p');
-             p.innerHTML = `[Insufficient information in source documents to generate section ${section.id}.]`;
-             placeholder.replaceWith(p);
-          }
-        }
-        currentEditorContent = tempDiv.innerHTML;
-        setEditorContent(currentEditorContent);
   
+        // Step 2: Generate draft using only the relevant text
+        if (analysisResponse.relevantText && analysisResponse.relevantText.trim() !== "") {
+            setCurrentSectionTitle(`Drafting section ${section.id}: ${section.title}`);
+            const draftResponse = await retryWithBackoff(() => 
+              generateCsrDraft({
+                sectionId: section.id,
+                sectionTitle: section.title,
+                sourceText: analysisResponse.relevantText,
+              })
+            );
+            finalDraft = draftResponse.draft;
+        } else {
+             finalDraft = `<p>[Insufficient information in source documents to generate this section.]</p>`;
+        }
+        
       } catch (error) {
-        console.error(`Error generating draft for section ${section.id} after retries:`, error);
+        console.error(`Error processing section ${section.id}:`, error);
         failedSections.push(section.id);
       }
+
+      // Step 3: Update the editor content with the generated draft
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = currentEditorContent;
+      const placeholder = tempDiv.querySelector(`[data-placeholder-for="section-${section.id}"]`);
+      
+      if (placeholder) {
+        placeholder.outerHTML = finalDraft;
+      }
+      currentEditorContent = tempDiv.innerHTML;
   
+      // Update progress and editor content after each section
       const progress = Math.round(((i + 1) / allSections.length) * 100);
       setGenerationProgress(progress);
+      setEditorContent(currentEditorContent);
     }
   
     if (failedSections.length > 0) {
@@ -417,3 +426,5 @@ export default function CsrDraftingPage() {
     </div>
   );
 }
+
+    
