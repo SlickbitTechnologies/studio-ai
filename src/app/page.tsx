@@ -157,8 +157,8 @@ export default function CsrDraftingPage() {
       setCurrentSectionTitle(`${section.id} ${section.title}`);
       
       try {
-        // Add a delay to avoid hitting rate limits
-        if (i > 0) await sleep(1500); // 1.5-second delay between requests
+        // Add a delay to avoid hitting rate limits or overloading the service
+        if (i > 0) await sleep(5000); // 5-second delay between requests
 
         const response = await generateCsrDraft({
           sectionId: section.id,
