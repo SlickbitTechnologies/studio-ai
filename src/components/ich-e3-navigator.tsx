@@ -1,3 +1,4 @@
+
 "use client";
 
 import * as React from "react";
@@ -28,6 +29,7 @@ const SectionItem = ({
   level?: number;
 } & Omit<IchE3NavigatorProps, 'onSelectForDrafting'>) => {
   const isActive = activeSection?.id === section.id;
+  const displayNumber = `${section.id}.`;
 
   if (section.children && section.children.length > 0) {
     return (
@@ -43,7 +45,10 @@ const SectionItem = ({
               onClick={() => setActiveSection(section)}
             >
               <ChevronRight className="h-4 w-4 mr-2 transition-transform duration-200" />
-              <span className="font-semibold truncate">{section.id} {section.title}</span>
+              <span className="font-semibold truncate">
+                <span className="inline-block w-10 text-left">{displayNumber}</span>
+                {section.title}
+              </span>
             </Button>
           </CollapsibleTrigger>
         </div>
@@ -72,7 +77,10 @@ const SectionItem = ({
         onClick={() => setActiveSection(section)}
         style={{ paddingLeft: `${level * 1 + 1.5}rem` }}
       >
-        <span className="truncate">{section.id} {section.title}</span>
+        <span className="truncate">
+          <span className="inline-block w-10 text-left">{displayNumber}</span>
+          {section.title}
+        </span>
       </Button>
     </div>
   );
@@ -87,7 +95,7 @@ export function IchE3Navigator({
       <div className="p-4 border-b">
         <h2 className="flex items-center gap-2 text-lg font-semibold font-headline">
           <FileText className="h-5 w-5 text-accent" />
-          ICH E3 Sections
+          CSR Template
         </h2>
       </div>
       <ScrollArea className="flex-1">
