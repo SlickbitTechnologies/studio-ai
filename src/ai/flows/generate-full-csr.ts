@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A flow for generating an entire Clinical Study Report in a single call.
@@ -94,3 +95,4 @@ const generateFullCsrFlow = ai.defineFlow(
     return output!;
   }
 );
+

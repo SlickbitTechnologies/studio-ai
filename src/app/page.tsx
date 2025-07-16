@@ -320,9 +320,6 @@ export default function CsrDraftingPage() {
                   <Label className="font-semibold text-lg">
                     2. Generate Full Draft
                   </Label>
-                  <p className="text-sm text-muted-foreground">
-                      Click the button below to generate a draft for the entire report. This will make a single request to the AI.
-                  </p>
                 </div>
 
                 {isGenerating && (
