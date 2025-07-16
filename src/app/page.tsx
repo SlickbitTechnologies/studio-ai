@@ -34,6 +34,36 @@ interface UploadedFile {
 // Helper function to introduce a delay
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Helper function for retrying API calls with exponential backoff
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  retries = 3,
+  initialDelay = 5000, // 5 seconds
+  backoffFactor = 2
+): Promise<T> {
+  let delay = initialDelay;
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      if (i === retries - 1) {
+        throw error;
+      }
+      // Check if it's a rate limit error to decide if we should retry
+      if (error.message && (error.message.includes("429") || error.message.includes("503"))) {
+        console.warn(`Attempt ${i + 1} failed. Retrying in ${delay / 1000}s...`);
+        await sleep(delay);
+        delay *= backoffFactor;
+      } else {
+        // Don't retry for other kinds of errors
+        throw error;
+      }
+    }
+  }
+  throw new Error("Max retries reached");
+}
+
+
 export default function CsrDraftingPage() {
   const [activeSection, setActiveSection] = useState<Section | null>(null);
   const [editorContent, setEditorContent] = useState<string>("");
@@ -125,18 +155,19 @@ export default function CsrDraftingPage() {
 
     setIsGenerating(true);
     setCurrentSectionTitle("Analyzing source documents and generating full draft...");
-    setGenerationProgress(25); // Initial progress
+    setGenerationProgress(25);
 
     try {
         const combinedSourceText = uploadedFiles.map((f) => f.content).join("\n\n---\n\n");
 
-        setGenerationProgress(50);
         setCurrentSectionTitle("Generating full report. This may take a moment...");
         
-        const fullDraftResponse = await generateFullCsr({
-            sourceText: combinedSourceText,
-        });
-
+        const fullDraftResponse = await retryWithBackoff(() => 
+            generateFullCsr({
+                sourceText: combinedSourceText,
+            })
+        );
+        
         setGenerationProgress(90);
         setCurrentSectionTitle("Finalizing document...");
         
@@ -152,7 +183,7 @@ export default function CsrDraftingPage() {
         toast({
             variant: "destructive",
             title: "Draft Generation Failed",
-            description: `An unexpected error occurred. Please check the console. Error: ${error.message}`,
+            description: `An unexpected error occurred after multiple retries. Please try again later. Error: ${error.message}`,
             duration: 9000,
         });
     } finally {
@@ -331,5 +362,3 @@ export default function CsrDraftingPage() {
     </div>
   );
 }
-
-    
