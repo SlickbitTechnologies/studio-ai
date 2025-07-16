@@ -205,7 +205,7 @@ export default function CsrDraftingPage() {
       </header>
       <div className="flex flex-1 min-h-0 relative">
         <aside className={cn(
-          "bg-card/50 border-r transition-all duration-300 ease-in-out",
+          "bg-card/50 border-r transition-all duration-300 ease-in-out overflow-hidden",
           isLeftPanelCollapsed ? "w-0" : "w-[380px]"
         )}>
           <div className="h-full w-[380px]">
