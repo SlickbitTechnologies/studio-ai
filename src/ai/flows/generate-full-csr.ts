@@ -49,27 +49,28 @@ const generateFullCsrPrompt = ai.definePrompt({
   input: { schema: FullCsrInputSchema },
   output: { schema: FullCsrOutputSchema },
   prompt: `
-    You are an expert medical writer specializing in Clinical Study Reports (CSRs), adhering strictly to ICH E3 guidelines.
-    Your task is to create a complete, multi-section draft of a CSR based on the provided source documents and the official ICH E3 structure.
+    You are an expert medical writer tasked with drafting a Clinical Study Report (CSR) based *only* on the provided source documents. Your work must strictly adhere to the ICH E3 guidelines.
 
-    **Instructions:**
-    1.  **Analyze Source Documents:** You will be given the full text from all available source documents.
-    2.  **Map Content to Structure:** Mentally map the information from the source documents to the appropriate sections of the ICH E3 structure provided below.
-    3.  **Draft the Full Report:** Write a comprehensive draft for the entire CSR.
-        - The output must be a single, well-formed HTML string.
-        - Generate content for every section listed in the structure.
-        - Use appropriate heading tags (e.g., <h2>, <h3>) for each section title, including the section ID (e.g., <h2 id="section-9">9 INVESTIGATIONAL PLAN</h2>).
-        - For each section's content, use appropriate HTML tags like <p>, <ul>, <ol>, <li>, <table>, etc.
-    4.  **Handle Insufficient Information:** If the source documents do not contain any relevant information for a specific section, state this clearly within that section's content, for example: "<p>[Insufficient information in source documents to generate this section.]</p>". Do not skip the section.
-    5.  **Start with a Title:** Begin the document with <h1>Clinical Study Report</h1>.
+    **Your Goal:** Create a complete, well-structured CSR draft in HTML format.
 
+    **Core Instructions:**
+
+    1.  **Analyze and Map:** Your primary task is to carefully read the **Full Source Document Text** provided below. For each section in the **Official ICH E3 Structure**, you must find the relevant information within the source text.
+    2.  **Draft the Report:** Generate a comprehensive draft for the entire CSR.
+        -   The output MUST be a single, well-formed HTML string.
+        -   Begin the report with an \`<h1>Clinical Study Report</h1>\` tag.
+        -   For each section and subsection, create a corresponding HTML heading with an ID (e.g., \`<h2 id="section-9">9 INVESTIGATIONAL PLAN</h2>\`, \`<h3 id="section-9.1">9.1 Overall Study Design and Plan - Description</h3>\`).
+        -   Under each heading, write the body of the section using the information you found in the source documents. Use standard HTML tags like \`<p>\`, \`<ul>\`, \`<li>\`, \`<table>\`, etc.
+    3.  **Synthesize, Don't Invent:** Your writing should be a synthesis of the information present in the source documents. Do not add information or make assumptions beyond what is provided.
+    4.  **Handle Missing Information (Last Resort):** Only if you have exhaustively searched the source documents and found absolutely no relevant information for a specific section should you include the text: \`[Insufficient information in source documents to generate this section.]\` within a \`<p>\` tag for that section. Do not use this as a default. It is crucial that you make every effort to populate each section from the provided text.
+
+    ---
     **Official ICH E3 Structure to Follow:**
-    ---
-${ichE3StructureString}
+    ${ichE3StructureString}
     ---
 
-    **Full Source Document Text:**
     ---
+    **Full Source Document Text:**
     {{{sourceText}}}
     ---
   `,
@@ -88,4 +89,3 @@ const generateFullCsrFlow = ai.defineFlow(
   }
 );
 
-    
