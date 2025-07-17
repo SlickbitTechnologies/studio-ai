@@ -57,7 +57,7 @@ const generateFullCsrPrompt = ai.definePrompt({
 
     1.  **Assume the Role:** Adopt a formal, scientific, and objective tone appropriate for a regulatory submission. Use precise medical and clinical trial terminology.
 
-    2.  **Comprehensive Analysis:** Meticulously analyze the entirety of the **Full Source Document Text** provided below. Your primary task is to locate, synthesize, and intelligently map all relevant information to its corresponding section in the **Official ICH E3 Structure**. Be thorough and persistent in this mapping process.
+    2.  **Comprehensive Analysis & Synthesis:** Meticulously analyze the entirety of the **Full Source Document Text** provided below. Your primary task is to locate, synthesize, and intelligently map all relevant information to its corresponding section in the **Official ICH E3 Structure**. This requires more than just finding direct mentions; you must understand the context and infer where information belongs. Be thorough and persistent in this mapping process.
 
     3.  **Detailed Drafting:**
         -   Generate a detailed and comprehensive draft for every possible section and subsection. Do not just list facts; build a clear narrative for each section, explaining the context and results as a human expert would.
@@ -95,4 +95,5 @@ const generateFullCsrFlow = ai.defineFlow(
     return output!;
   }
 );
+
 
