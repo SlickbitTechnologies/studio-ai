@@ -70,6 +70,7 @@ const generateFullCsrPrompt = ai.definePrompt({
 
 | CSR Section              | Typical Source(s) to Prioritize        | Extraction Guidance                                                                  |
 | ------------------------ | -------------------------------------- | ------------------------------------------------------------------------------------ |
+| Title Page               | Protocol, Regulatory Submission        | Extract study title, protocol ID, sponsor name, phase, and version details.          |
 | Synopsis/Introduction    | Protocol, Clinical Review, IB, Regulatory | Pull study rationale, objectives, background, and summary findings.                  |
 | Methods                  | Protocol, SAP, Clinical/Statistical Review | Extract design, populations, eligibility, interventions, endpoints, analysis methods. |
 | Statistical Methods      | SAP, Clinical/Statistical Review, Protocol | Use SAP if present; otherwise, derive analytic detail from reviews or protocol.    |
