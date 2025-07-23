@@ -40,7 +40,14 @@ export type FullCsrOutput = z.infer<typeof FullCsrOutputSchema>;
 export async function generateFullCsr(
   input: FullCsrInput
 ): Promise<FullCsrOutput> {
-  return generateFullCsrFlow(input);
+  try {
+    return await generateFullCsrFlow(input);
+  } catch (error: any) {
+    console.error("[generateFullCsr] Error:", error);
+    return {
+      fullDraft: `<h2>Draft Generation Failed</h2><p>An error occurred while generating the draft. Details: ${error?.message || error?.toString() || 'Unknown error.'}</p>`
+    };
+  }
 }
 
 
@@ -109,7 +116,17 @@ const generateFullCsrFlow = ai.defineFlow(
     outputSchema: FullCsrOutputSchema,
   },
   async input => {
-    const {output} = await generateFullCsrPrompt(input);
-    return output!;
+    try {
+      const {output} = await generateFullCsrPrompt(input);
+      if (!output || typeof output.fullDraft !== 'string') {
+        throw new Error("LLM did not return a valid fullDraft string.");
+      }
+      return output;
+    } catch (error: any) {
+      console.error("[generateFullCsrFlow] Error:", error);
+      return {
+        fullDraft: `<h2>Draft Generation Failed</h2><p>An error occurred while generating the draft. Details: ${error?.message || error?.toString() || 'Unknown error.'}</p>`
+      };
+    }
   }
 );
