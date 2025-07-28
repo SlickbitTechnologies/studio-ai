@@ -3,7 +3,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: "CSR DraftWise",
+  title: "Accura",
   description: "AI-powered Clinical Study Report (CSR) drafting platform.",
 };
 

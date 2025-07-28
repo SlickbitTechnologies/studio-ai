@@ -79,7 +79,7 @@ export default function CsrDraftingPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getInitialEditorContent = (): string => {
-    let content = `<h1>Clinical Study Report</h1><p>Welcome to CSR DraftWise! This document is structured according to the ICH E3 guidelines.</p><p>To get started, upload your source documents and click "Generate Full Draft".</p>`;
+    let content = `<h1>Clinical Study Report</h1><p>Welcome to Accura! This document is structured according to the ICH E3 guidelines.</p><p>To get started, upload your source documents and click "Generate Full Draft".</p>`;
     return content;
   };
 
@@ -199,7 +199,7 @@ export default function CsrDraftingPage() {
         <div className="flex items-center gap-3">
           <BrainCircuit className="h-7 w-7 text-primary" />
           <h1 className="text-2xl font-bold text-foreground font-headline">
-            CSR DraftWise
+            Accura
           </h1>
         </div>
       </header>
